@@ -97,11 +97,13 @@ class LiffRedirectController(http.Controller):
         if not user:
             return request.redirect('/liff/member?error=login_failed')
 
-        # 建立 session：設定一次性密碼後用正式 authenticate
+        # 建立 session：設定一次性密碼 → flush+commit → authenticate
         db = request.env.cr.dbname
         temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
         try:
             user.sudo().write({'password': temp_password})
+            request.env.cr.flush()
+            request.env.cr.commit()
             request.session.authenticate(db, user.login, temp_password)
         except Exception:
             _logger.exception('liff_redirect: session.authenticate 失敗')
@@ -159,6 +161,8 @@ class LiffRedirectController(http.Controller):
         temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
         try:
             user.sudo().write({'password': temp_password})
+            request.env.cr.flush()
+            request.env.cr.commit()
             request.session.authenticate(db, user.login, temp_password)
         except Exception:
             _logger.exception('liff_redirect_booking: session.authenticate 失敗')
