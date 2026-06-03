@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- woow_line_bridge/data/markstudio_demo_data.xml -->
+<!-- Mark Studio 馬克健身 Demo 資料 -->
+<odoo>
+    <data noupdate="1">
+        <!-- 預留：可加入 demo partner、demo 預約等測試資料 -->
+        <!-- 正式部署時這些資料不會被載入（noupdate=1） -->
+    </data>
+</odoo>

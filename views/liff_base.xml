@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- woow_line_bridge/views/liff_base.xml -->
+<!-- LIFF 頁面共用基底模板，引入 LIFF SDK -->
+<odoo>
+
+    <!-- LIFF 頁面共用基底（不含 Odoo header/footer） -->
+    <template id="liff_layout" name="LIFF Base Layout">
+        <t t-call="web.frontend_layout">
+            <t t-set="no_header" t-value="True"/>
+            <t t-set="no_footer" t-value="True"/>
+            <div id="liff-app" class="liff-container">
+                <t t-raw="0"/>
+            </div>
+        </t>
+    </template>
+
+    <!-- LIFF Redirect 中間頁（取得 ID Token 用） -->
+    <template id="liff_redirect_bridge" name="LIFF Redirect Bridge">
+        <t t-call="woow_line_bridge.liff_layout">
+            <div class="liff-loading" style="display:flex;align-items:center;justify-content:center;min-height:100vh;background:#FAF6F2;">
+                <div style="text-align:center;">
+                    <div class="liff-spinner" style="width:40px;height:40px;border:4px solid #E0D5C8;border-top-color:#B8956A;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px;"></div>
+                    <p style="color:#6B5B4E;font-family:'Noto Sans TC',sans-serif;font-size:14px;">正在登入中...</p>
+                </div>
+            </div>
+            <style>
+                @keyframes spin { to { transform: rotate(360deg); } }
+            </style>
+            <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+            <script>
+                (function() {
+                    var liffId = '<t t-esc="liff_id"/>';
+                    var target = '<t t-esc="target"/>';
+
+                    if (!liffId) {
+                        console.error('LIFF ID 未設定');
+                        return;
+                    }
+
+                    liff.init({ liffId: liffId }).then(function() {
+                        if (!liff.isLoggedIn()) {
+                            liff.login({ redirectUri: window.location.href });
+                            return;
+                        }
+
+                        liff.getIDToken().then(function(idToken) {
+                            if (!idToken) {
+                                console.error('無法取得 ID Token');
+                                return;
+                            }
+
+                            // POST ID Token 到 redirect endpoint
+                            var form = document.createElement('form');
+                            form.method = 'POST';
+                            form.action = window.location.pathname;
+
+                            var input = document.createElement('input');
+                            input.type = 'hidden';
+                            input.name = 'id_token';
+                            input.value = idToken;
+                            form.appendChild(input);
+
+                            document.body.appendChild(form);
+                            form.submit();
+                        }).catch(function(err) {
+                            // getIDToken 可能不是 Promise 在某些版本
+                            var idToken = liff.getIDToken();
+                            if (idToken) {
+                                var form = document.createElement('form');
+                                form.method = 'POST';
+                                form.action = window.location.pathname;
+
+                                var input = document.createElement('input');
+                                input.type = 'hidden';
+                                input.name = 'id_token';
+                                input.value = idToken;
+                                form.appendChild(input);
+
+                                document.body.appendChild(form);
+                                form.submit();
+                            } else {
+                                console.error('getIDToken 失敗', err);
+                            }
+                        });
+                    }).catch(function(err) {
+                        console.error('LIFF init 失敗', err);
+                    });
+                })();
+            </script>
+        </t>
+    </template>
+
+</odoo>

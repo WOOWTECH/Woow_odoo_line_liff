@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- woow_line_bridge/views/liff_locations.xml -->
+<!-- 店家位置 LIFF 頁面（Phase 3 補完地圖整合） -->
+<odoo>
+
+    <template id="liff_locations_page" name="LIFF Locations Page">
+        <t t-call="woow_line_bridge.liff_layout">
+            <div class="liff-locations">
+
+                <!-- 頂部 -->
+                <div class="liff-page-header">
+                    <a href="/liff/member" class="liff-back-btn">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2D2620" stroke-width="2">
+                            <polyline points="15 18 9 12 15 6"/>
+                        </svg>
+                    </a>
+                    <h1 class="liff-page-title">店家位置</h1>
+                </div>
+
+                <!-- 店家資訊卡 -->
+                <div class="liff-location-card">
+                    <h2 class="liff-location-name" t-esc="shop_name"/>
+
+                    <div class="liff-location-info">
+                        <t t-if="shop_address">
+                            <div class="liff-location-row">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#B8956A" stroke-width="2">
+                                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+                                    <circle cx="12" cy="10" r="3"/>
+                                </svg>
+                                <span t-esc="shop_address"/>
+                            </div>
+                        </t>
+                        <t t-if="shop_phone">
+                            <div class="liff-location-row">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#B8956A" stroke-width="2">
+                                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/>
+                                </svg>
+                                <a t-attf-href="tel:{{shop_phone}}" t-esc="shop_phone"/>
+                            </div>
+                        </t>
+                        <t t-if="shop_opening_hours">
+                            <div class="liff-location-row">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#B8956A" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"/>
+                                    <polyline points="12 6 12 12 16 14"/>
+                                </svg>
+                                <span t-esc="shop_opening_hours"/>
+                            </div>
+                        </t>
+                    </div>
+
+                    <!-- 導航按鈕 -->
+                    <t t-if="shop_latitude and shop_longitude">
+                        <div class="liff-location-actions">
+                            <a t-attf-href="https://www.google.com/maps/dir/?api=1&amp;destination={{shop_latitude}},{{shop_longitude}}"
+                               class="liff-btn liff-btn-primary" target="_blank">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <polygon points="3 11 22 2 13 21 11 13 3 11"/>
+                                </svg>
+                                Google 地圖導航
+                            </a>
+                        </div>
+                    </t>
+                </div>
+
+                <!-- 地圖預覽（Phase 3 補完 Google Maps embed） -->
+                <t t-if="shop_latitude and shop_longitude">
+                    <div class="liff-location-map" id="liff-map"
+                         t-att-data-lat="shop_latitude"
+                         t-att-data-lng="shop_longitude">
+                        <div class="liff-map-placeholder">
+                            <p>地圖載入中...</p>
+                        </div>
+                    </div>
+                </t>
+
+            </div>
+        </t>
+    </template>
+
+</odoo>

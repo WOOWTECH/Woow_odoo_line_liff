@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- woow_line_bridge/views/liff_news.xml -->
+<!-- 最新消息 LIFF 頁面（Phase 3 補完動態內容） -->
+<odoo>
+
+    <template id="liff_news_page" name="LIFF News Page">
+        <t t-call="woow_line_bridge.liff_layout">
+            <div class="liff-news">
+
+                <!-- 頂部 -->
+                <div class="liff-page-header">
+                    <a href="/liff/member" class="liff-back-btn">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2D2620" stroke-width="2">
+                            <polyline points="15 18 9 12 15 6"/>
+                        </svg>
+                    </a>
+                    <h1 class="liff-page-title">最新消息</h1>
+                </div>
+
+                <!-- 消息列表（Phase 3 補完動態載入） -->
+                <div class="liff-news-list">
+                    <div class="liff-news-empty">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#B8956A" stroke-width="1.5">
+                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                        </svg>
+                        <p>目前沒有最新消息</p>
+                        <p class="liff-news-empty-sub">稍後再來看看吧！</p>
+                    </div>
+                </div>
+
+            </div>
+        </t>
+    </template>
+
+</odoo>

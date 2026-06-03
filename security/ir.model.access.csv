@@ -1,0 +1,7 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_line_user_user,line.user.user,model_line_user,group_line_user,1,0,0,0
+access_line_user_manager,line.user.manager,model_line_user,group_line_manager,1,1,1,1
+access_line_event_log_user,line.event.log.user,model_line_event_log,group_line_user,1,0,0,0
+access_line_event_log_manager,line.event.log.manager,model_line_event_log,group_line_manager,1,1,1,1
+access_line_push_log_user,line.push.log.user,model_line_push_log,group_line_user,1,0,0,0
+access_line_push_log_manager,line.push.log.manager,model_line_push_log,group_line_manager,1,1,1,1

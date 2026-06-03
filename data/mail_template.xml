@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- woow_line_bridge/data/mail_template.xml -->
+<!-- 郵件模板（預留，未來可用於 LINE + Email 雙通道通知） -->
+<odoo>
+    <data noupdate="1">
+        <!-- 預留：Phase 2 / 3 補完 -->
+    </data>
+</odoo>

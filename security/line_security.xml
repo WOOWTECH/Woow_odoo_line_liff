@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- woow_line_bridge/security/line_security.xml -->
+<!-- LINE Bridge 安全群組定義 -->
+<odoo>
+    <data noupdate="1">
+
+        <!-- LINE Bridge 模組類別 -->
+        <record id="module_category_line_bridge" model="ir.module.category">
+            <field name="name">LINE Bridge</field>
+            <field name="description">LINE 平台整合管理</field>
+            <field name="sequence">50</field>
+        </record>
+
+        <!-- LINE Bridge 使用者群組 -->
+        <record id="group_line_user" model="res.groups">
+            <field name="name">LINE Bridge 使用者</field>
+            <field name="category_id" ref="module_category_line_bridge"/>
+            <field name="comment">可檢視 LINE 用戶記錄與推播記錄</field>
+        </record>
+
+        <!-- LINE Bridge 管理者群組 -->
+        <record id="group_line_manager" model="res.groups">
+            <field name="name">LINE Bridge 管理者</field>
+            <field name="category_id" ref="module_category_line_bridge"/>
+            <field name="implied_ids" eval="[(4, ref('group_line_user'))]"/>
+            <field name="comment">可管理 LINE 設定、發送推播、管理用戶綁定</field>
+            <field name="users" eval="[(4, ref('base.user_root')), (4, ref('base.user_admin'))]"/>
+        </record>
+
+    </data>
+</odoo>

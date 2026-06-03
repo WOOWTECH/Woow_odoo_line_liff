@@ -1,0 +1,140 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- woow_line_bridge/views/res_config_settings_views.xml -->
+<!-- 設定頁加 LINE 金鑰 + 店家資訊區塊 -->
+<odoo>
+
+    <record id="res_config_settings_view_form_line" model="ir.ui.view">
+        <field name="name">res.config.settings.form.line</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app data-string="LINE Bridge" string="LINE Bridge"
+                     data-key="woow_line_bridge"
+                     groups="woow_line_bridge.group_line_manager">
+
+                    <block title="LINE Login Channel" name="line_login_settings">
+                        <setting string="LINE Login Channel ID" help="LINE Login 的 Channel ID">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="line_login_channel_id" class="col-lg-3 o_light_label"/>
+                                    <field name="line_login_channel_id" class="col-lg-6"/>
+                                </div>
+                            </div>
+                        </setting>
+                        <setting string="LINE Login Channel Secret" help="LINE Login 的 Channel Secret">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="line_login_channel_secret" class="col-lg-3 o_light_label"/>
+                                    <field name="line_login_channel_secret" class="col-lg-6" password="True"/>
+                                </div>
+                            </div>
+                        </setting>
+                    </block>
+
+                    <block title="LINE Messaging API" name="line_messaging_settings">
+                        <setting string="Messaging Channel ID" help="Messaging API 的 Channel ID">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="line_messaging_channel_id" class="col-lg-3 o_light_label"/>
+                                    <field name="line_messaging_channel_id" class="col-lg-6"/>
+                                </div>
+                            </div>
+                        </setting>
+                        <setting string="Messaging Channel Secret" help="Messaging API 的 Channel Secret">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="line_messaging_channel_secret" class="col-lg-3 o_light_label"/>
+                                    <field name="line_messaging_channel_secret" class="col-lg-6" password="True"/>
+                                </div>
+                            </div>
+                        </setting>
+                        <setting string="Messaging Access Token" help="Long-lived Channel Access Token">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="line_messaging_access_token" class="col-lg-3 o_light_label"/>
+                                    <field name="line_messaging_access_token" class="col-lg-6" password="True"/>
+                                </div>
+                            </div>
+                        </setting>
+                    </block>
+
+                    <block title="LIFF 設定" name="line_liff_settings">
+                        <setting string="LIFF ID - 會員中心" help="會員中心主入口的 LIFF ID">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="line_liff_id_member" class="col-lg-3 o_light_label"/>
+                                    <field name="line_liff_id_member" class="col-lg-6"/>
+                                </div>
+                            </div>
+                        </setting>
+                        <setting string="LIFF ID - 最新消息" help="最新消息頁面的 LIFF ID">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="line_liff_id_news" class="col-lg-3 o_light_label"/>
+                                    <field name="line_liff_id_news" class="col-lg-6"/>
+                                </div>
+                            </div>
+                        </setting>
+                        <setting string="LIFF ID - 店家位置" help="店家位置頁面的 LIFF ID">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="line_liff_id_locations" class="col-lg-3 o_light_label"/>
+                                    <field name="line_liff_id_locations" class="col-lg-6"/>
+                                </div>
+                            </div>
+                        </setting>
+                    </block>
+
+                    <block title="店家資訊" name="line_shop_settings">
+                        <setting string="店家名稱">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="line_shop_name" class="col-lg-3 o_light_label"/>
+                                    <field name="line_shop_name" class="col-lg-6"/>
+                                </div>
+                            </div>
+                        </setting>
+                        <setting string="店家地址">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="line_shop_address" class="col-lg-3 o_light_label"/>
+                                    <field name="line_shop_address" class="col-lg-6"/>
+                                </div>
+                            </div>
+                        </setting>
+                        <setting string="店家電話">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="line_shop_phone" class="col-lg-3 o_light_label"/>
+                                    <field name="line_shop_phone" class="col-lg-6"/>
+                                </div>
+                            </div>
+                        </setting>
+                        <setting string="GPS 座標" help="用於地圖顯示與導航">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="line_shop_latitude" class="col-lg-3 o_light_label"/>
+                                    <field name="line_shop_latitude" class="col-lg-3" placeholder="25.0330"/>
+                                    <label for="line_shop_longitude" class="col-lg-3 o_light_label"/>
+                                    <field name="line_shop_longitude" class="col-lg-3" placeholder="121.5654"/>
+                                </div>
+                            </div>
+                        </setting>
+                        <setting string="營業時間">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="line_shop_opening_hours" class="col-lg-3 o_light_label"/>
+                                    <field name="line_shop_opening_hours" class="col-lg-6"
+                                           placeholder="週一至週五 10:00-21:00，週六 10:00-18:00"/>
+                                </div>
+                            </div>
+                        </setting>
+                    </block>
+
+                </app>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

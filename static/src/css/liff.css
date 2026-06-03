@@ -1,0 +1,233 @@
+/**
+ * woow_line_bridge/static/src/css/liff.css
+ * LIFF 頁面共用樣式
+ * 用於自建 LIFF 頁面與 LIFF 模式下的 portal 頁面
+ */
+
+/* ============================================================
+   LIFF 模式：隱藏 Odoo header/footer
+   ============================================================ */
+html.liff-mode header,
+html.liff-mode nav.navbar,
+html.liff-mode .o_main_navbar,
+html.liff-mode footer,
+html.liff-mode .o_portal_navbar,
+html.liff-mode #top_menu_container,
+html.liff-mode #oe_main_menu_navbar {
+    display: none !important;
+}
+
+html.liff-mode #wrapwrap {
+    padding-top: 0 !important;
+    margin-top: 0 !important;
+}
+
+html.liff-mode .o_portal_wrap {
+    padding-top: 0 !important;
+}
+
+/* ============================================================
+   LIFF Container
+   ============================================================ */
+.liff-container {
+    font-family: 'Noto Sans TC', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    background-color: #FAF6F2;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
+
+/* ============================================================
+   LIFF 頁面 Header（返回 + 標題）
+   ============================================================ */
+.liff-page-header {
+    display: flex;
+    align-items: center;
+    padding: 12px 16px;
+    background: #FFFFFF;
+    border-bottom: 1px solid #E8E0D8;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+}
+
+.liff-back-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 36px;
+    height: 36px;
+    margin-right: 8px;
+    text-decoration: none;
+    color: #2D2620;
+}
+
+.liff-page-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: #2D2620;
+    margin: 0;
+}
+
+/* ============================================================
+   LIFF 按鈕
+   ============================================================ */
+.liff-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 12px 24px;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 600;
+    text-decoration: none;
+    border: none;
+    cursor: pointer;
+    transition: opacity 0.2s;
+}
+
+.liff-btn:hover {
+    opacity: 0.85;
+}
+
+.liff-btn-primary {
+    background-color: #B8956A;
+    color: #FFFFFF;
+}
+
+.liff-btn-secondary {
+    background-color: #FFFFFF;
+    color: #B8956A;
+    border: 1px solid #B8956A;
+}
+
+.liff-btn-line {
+    background-color: #06C755;
+    color: #FFFFFF;
+}
+
+/* ============================================================
+   LIFF Loading Spinner
+   ============================================================ */
+.liff-spinner {
+    width: 40px;
+    height: 40px;
+    border: 4px solid #E0D5C8;
+    border-top-color: #B8956A;
+    border-radius: 50%;
+    animation: liff-spin 0.8s linear infinite;
+}
+
+@keyframes liff-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* ============================================================
+   News Page
+   ============================================================ */
+.liff-news {
+    min-height: 100vh;
+    background: #FAF6F2;
+}
+
+.liff-news-list {
+    padding: 16px;
+}
+
+.liff-news-empty {
+    text-align: center;
+    padding: 60px 20px;
+    color: #6B5B4E;
+}
+
+.liff-news-empty svg {
+    margin-bottom: 16px;
+}
+
+.liff-news-empty p {
+    font-size: 16px;
+    font-weight: 600;
+    margin: 0 0 4px;
+}
+
+.liff-news-empty-sub {
+    font-size: 13px !important;
+    font-weight: 400 !important;
+    color: #9B8E82 !important;
+}
+
+/* ============================================================
+   Locations Page
+   ============================================================ */
+.liff-locations {
+    min-height: 100vh;
+    background: #FAF6F2;
+}
+
+.liff-location-card {
+    margin: 16px;
+    padding: 20px;
+    background: #FFFFFF;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.liff-location-name {
+    font-size: 20px;
+    font-weight: 700;
+    color: #2D2620;
+    margin: 0 0 16px;
+}
+
+.liff-location-info {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.liff-location-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    font-size: 14px;
+    color: #6B5B4E;
+    line-height: 1.5;
+}
+
+.liff-location-row svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+}
+
+.liff-location-row a {
+    color: #B8956A;
+    text-decoration: none;
+}
+
+.liff-location-actions {
+    margin-top: 20px;
+    display: flex;
+    gap: 12px;
+}
+
+.liff-location-actions .liff-btn {
+    flex: 1;
+}
+
+.liff-location-map {
+    margin: 0 16px 16px;
+    border-radius: 12px;
+    overflow: hidden;
+    background: #FFFFFF;
+    min-height: 200px;
+}
+
+.liff-map-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+    color: #9B8E82;
+    font-size: 14px;
+}
