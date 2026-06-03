@@ -39,7 +39,7 @@
     <menuitem id="menu_line_config"
               name="設定"
               parent="menu_line_bridge_root"
-              action="base.action_general_configuration"
+              action="base.res_config_setting_act_window"
               sequence="99"
               groups="woow_line_bridge.group_line_manager"/>
 
