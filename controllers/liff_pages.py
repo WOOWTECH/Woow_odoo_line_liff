@@ -65,3 +65,87 @@ class LiffPagesController(http.Controller):
             'shop_opening_hours': shop_hours,
         }
         return request.render('woow_line_bridge.liff_locations_page', values)
+
+    @http.route('/liff/debug', type='http', auth='public', website=False, csrf=False)
+    def liff_debug(self, **kwargs):
+        """LIFF 診斷頁面 — 在 LINE 內開啟看 LIFF SDK 狀態"""
+        ICP = request.env['ir.config_parameter'].sudo()
+        liff_id = ICP.get_param('woow_line_bridge.liff_id_member', '')
+
+        html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LIFF Debug</title>
+<style>body{{font-family:monospace;padding:16px;background:#FAF6F2;font-size:13px;}}
+pre{{background:#fff;padding:12px;border-radius:8px;overflow-x:auto;white-space:pre-wrap;}}
+.ok{{color:green;}} .fail{{color:red;}} .warn{{color:orange;}}</style>
+</head><body>
+<h2>LIFF Debug</h2>
+<pre id="log">Loading LIFF SDK...</pre>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script>
+var log = document.getElementById('log');
+function L(msg) {{ log.textContent += '\\n' + msg; }}
+function S(label, val, cls) {{ L('[' + (cls||'') + '] ' + label + ': ' + val); }}
+
+L('LIFF ID: {liff_id}');
+L('URL: ' + window.location.href);
+L('UserAgent: ' + navigator.userAgent.substring(0, 80));
+L('');
+
+if (typeof liff === 'undefined') {{
+    S('SDK', 'NOT LOADED', 'fail');
+}} else {{
+    S('SDK', 'loaded', 'ok');
+    L('Calling liff.init()...');
+
+    liff.init({{ liffId: '{liff_id}' }}).then(function() {{
+        S('init', 'SUCCESS', 'ok');
+        S('isLoggedIn', liff.isLoggedIn());
+        S('isInClient', liff.isInClient());
+
+        var os = liff.getOS();
+        S('getOS', os);
+
+        var lang = liff.getLanguage();
+        S('getLanguage', lang);
+
+        var ver = liff.getVersion();
+        S('getVersion', ver);
+
+        var ctx = liff.getContext();
+        S('getContext', JSON.stringify(ctx));
+
+        // ID Token
+        try {{
+            var idToken = liff.getIDToken();
+            S('getIDToken', idToken ? idToken.substring(0, 30) + '...' : 'null', idToken ? 'ok' : 'warn');
+        }} catch(e) {{
+            S('getIDToken', 'ERROR: ' + e.message, 'fail');
+        }}
+
+        // Access Token
+        try {{
+            var accessToken = liff.getAccessToken();
+            S('getAccessToken', accessToken ? accessToken.substring(0, 30) + '...' : 'null', accessToken ? 'ok' : 'warn');
+        }} catch(e) {{
+            S('getAccessToken', 'ERROR: ' + e.message, 'fail');
+        }}
+
+        // Profile
+        if (liff.isLoggedIn()) {{
+            liff.getProfile().then(function(p) {{
+                S('profile.userId', p.userId, 'ok');
+                S('profile.displayName', p.displayName);
+                S('profile.pictureUrl', p.pictureUrl ? 'yes' : 'no');
+            }}).catch(function(e) {{
+                S('getProfile', 'ERROR: ' + e.message, 'fail');
+            }});
+        }}
+    }}).catch(function(err) {{
+        S('init', 'FAILED: ' + err.message, 'fail');
+        L('');
+        L('Full error: ' + JSON.stringify(err));
+    }});
+}}
+</script></body></html>"""
+        return request.make_response(html, headers=[('Content-Type', 'text/html')])
