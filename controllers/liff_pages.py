@@ -17,12 +17,47 @@ class LiffPagesController(http.Controller):
     auth='public' 因為初次打開時用戶尚未登入 Odoo。
     """
 
+    def _heal_session(self):
+        """清除可能壞掉的 session
+
+        LIFF 頁面不需要 Odoo session（auth=public），
+        如果帶著壞 session cookie 來會導致 403。
+        直接 logout 清掉，讓頁面正常渲染。
+        """
+        try:
+            if request.session.uid:
+                request.session.logout(keep_db=True)
+        except Exception:
+            try:
+                request.session.uid = False
+                request.session.login = None
+            except Exception:
+                pass
+
+    @http.route('/liff/clear-session', type='http', auth='none', csrf=False,
+                save_session=False)
+    def liff_clear_session(self, **kwargs):
+        """清除壞掉的 session 並重導回 LIFF member 頁面
+
+        當 LIFF 登入產生壞 session 時，所有頁面都會 403。
+        這個 auth='none' 的端點不會觸發 session 驗證，
+        所以可以安全地清除 session 後重導。
+        """
+        redirect_to = kwargs.get('r', '/liff/member')
+        # 清除 session
+        request.session.uid = False
+        request.session.login = None
+        _logger.info('已清除壞 session，重導到 %s', redirect_to)
+        return request.redirect(redirect_to)
+
     @http.route('/liff/member', type='http', auth='public', website=True)
     def liff_member(self, **kwargs):
         """會員中心主入口頁
 
         6 宮格功能列表，品牌色。
         """
+        self._heal_session()
+
         ICP = request.env['ir.config_parameter'].sudo()
         liff_id = ICP.get_param('woow_line_bridge.liff_id_member', '')
         shop_name = ICP.get_param('woow_line_bridge.shop_name', 'Mark Studio 馬克健身')

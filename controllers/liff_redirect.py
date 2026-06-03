@@ -38,8 +38,8 @@ class LiffRedirectController(http.Controller):
         'profile': '/my/account',
     }
 
-    @http.route('/liff/redirect/<string:target>', type='http', auth='public',
-                methods=['GET', 'POST'], website=True, csrf=False)
+    @http.route('/liff/redirect/<string:target>', type='http', auth='none',
+                methods=['GET', 'POST'], website=False, csrf=False)
     def liff_redirect(self, target, **kwargs):
         """LIFF 自動登入跳轉端點
 
@@ -121,7 +121,7 @@ class LiffRedirectController(http.Controller):
         return request.redirect(redirect_url)
 
     @http.route('/liff/redirect/booking/<int:booking_id>', type='http',
-                auth='public', methods=['GET', 'POST'], website=True, csrf=False)
+                auth='none', methods=['GET', 'POST'], website=False, csrf=False)
     def liff_redirect_booking(self, booking_id, **kwargs):
         """LIFF 跳轉到特定預約詳情"""
         if request.httprequest.method == 'GET':
@@ -179,15 +179,47 @@ class LiffRedirectController(http.Controller):
     def _render_liff_bridge_page(self, target):
         """渲染 LIFF 中間頁（取得 ID Token 用）
 
-        這個頁面會載入 LIFF SDK，取得 ID Token 後 POST 回 redirect endpoint。
+        使用 auth='none' 所以不能用 request.render()，直接回 HTML。
         """
         ICP = request.env['ir.config_parameter'].sudo()
         liff_id = ICP.get_param('woow_line_bridge.liff_id_member', '')
 
-        return request.render('woow_line_bridge.liff_redirect_bridge', {
-            'target': target,
-            'liff_id': liff_id,
-        })
+        # 直接跳轉對照表（fallback）
+        direct_urls = {
+            'book': '/appointment/1/schedule',
+            'my-bookings': '/my/ext-bookings',
+            'profile': '/my/account',
+        }
+
+        html = f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Loading...</title>
+<style>body{{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#FAF6F2;margin:0;}}
+.s{{width:40px;height:40px;border:4px solid #E0D5C8;border-top-color:#B8956A;border-radius:50%;animation:r .8s linear infinite;margin:0 auto 16px;}}
+@keyframes r{{to{{transform:rotate(360deg)}}}}</style></head>
+<body><div style="text-align:center"><div class="s"></div>
+<p id="st" style="color:#6B5B4E;font-family:sans-serif;font-size:14px;">正在登入中...</p></div>
+<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
+<script>
+(function(){{
+var liffId='{liff_id}',target='{target}';
+var fallbacks={json.dumps(direct_urls)};
+function fb(){{var u=fallbacks[target]||'/appointment/1/schedule';window.location.href=u;}}
+if(!liffId||typeof liff==='undefined'){{fb();return;}}
+liff.init({{liffId:liffId}}).then(function(){{
+  if(!liff.isLoggedIn()){{fb();return;}}
+  var t=null,a=null;
+  try{{t=liff.getIDToken();}}catch(e){{}}
+  try{{a=liff.getAccessToken();}}catch(e){{}}
+  if(!t&&!a){{fb();return;}}
+  var f=document.createElement('form');f.method='POST';f.action=window.location.pathname;
+  if(t){{var i=document.createElement('input');i.type='hidden';i.name='id_token';i.value=t;f.appendChild(i);}}
+  if(a){{var i2=document.createElement('input');i2.type='hidden';i2.name='access_token';i2.value=a;f.appendChild(i2);}}
+  document.body.appendChild(f);f.submit();
+}}).catch(function(){{fb();}});
+}})();
+</script></body></html>"""
+        return request.make_response(html, headers=[('Content-Type', 'text/html')])
 
     def _ensure_portal_user(self, line_user, id_token_payload):
         """確保 LINE 用戶有對應的 portal user
