@@ -97,14 +97,18 @@ class LiffRedirectController(http.Controller):
         if not user:
             return request.redirect('/liff/member?error=login_failed')
 
-        # 建立 session：設定一次性密碼 → flush+commit → authenticate
+        # 建立 session：Odoo 18 authenticate(db, credential_dict)
         db = request.env.cr.dbname
         temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
         try:
             user.sudo().write({'password': temp_password})
             request.env.cr.flush()
             request.env.cr.commit()
-            request.session.authenticate(db, user.login, temp_password)
+            request.session.authenticate(db, {
+                'login': user.login,
+                'password': temp_password,
+                'type': 'password',
+            })
         except Exception:
             _logger.exception('liff_redirect: session.authenticate 失敗')
             return request.redirect('/liff/member?error=login_failed')
@@ -163,7 +167,11 @@ class LiffRedirectController(http.Controller):
             user.sudo().write({'password': temp_password})
             request.env.cr.flush()
             request.env.cr.commit()
-            request.session.authenticate(db, user.login, temp_password)
+            request.session.authenticate(db, {
+                'login': user.login,
+                'password': temp_password,
+                'type': 'password',
+            })
         except Exception:
             _logger.exception('liff_redirect_booking: session.authenticate 失敗')
             return request.redirect('/liff/member?error=login_failed')
