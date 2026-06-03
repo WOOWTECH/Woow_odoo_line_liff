@@ -97,20 +97,15 @@ class LiffRedirectController(http.Controller):
         if not user:
             return request.redirect('/liff/member?error=login_failed')
 
-        # 建立 session
+        # 建立 session：設定一次性密碼後用正式 authenticate
+        db = request.env.cr.dbname
+        temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
         try:
-            db = request.env.cr.dbname
-            request.session.authenticate(db, user.login, {'type': 'line_liff', 'user_id': user.id})
+            user.sudo().write({'password': temp_password})
+            request.session.authenticate(db, user.login, temp_password)
         except Exception:
             _logger.exception('liff_redirect: session.authenticate 失敗')
-            # 備用方案：直接設定 session
-            try:
-                request.session.uid = user.id
-                request.session.login = user.login
-                request.env = request.env(user=user.id)
-            except Exception:
-                _logger.exception('liff_redirect: 備用登入方案也失敗')
-                return request.redirect('/liff/member?error=login_failed')
+            return request.redirect('/liff/member?error=login_failed')
 
         # 決定 redirect 目標
         redirect_url = self._get_redirect_url(target, kwargs)
@@ -160,17 +155,14 @@ class LiffRedirectController(http.Controller):
         if not user:
             return request.redirect('/liff/member?error=login_failed')
 
+        db = request.env.cr.dbname
+        temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
         try:
-            db = request.env.cr.dbname
-            request.session.authenticate(db, user.login, {'type': 'line_liff', 'user_id': user.id})
+            user.sudo().write({'password': temp_password})
+            request.session.authenticate(db, user.login, temp_password)
         except Exception:
             _logger.exception('liff_redirect_booking: session.authenticate 失敗')
-            try:
-                request.session.uid = user.id
-                request.session.login = user.login
-                request.env = request.env(user=user.id)
-            except Exception:
-                return request.redirect('/liff/member?error=login_failed')
+            return request.redirect('/liff/member?error=login_failed')
 
         # 跳轉到預約詳情
         redirect_url = f'/my/ext-bookings/{booking_id}?liff=1'
