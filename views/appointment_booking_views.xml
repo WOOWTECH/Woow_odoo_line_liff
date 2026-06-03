@@ -7,7 +7,7 @@
     <record id="appointment_booking_view_form_line" model="ir.ui.view">
         <field name="name">appointment.booking.form.line</field>
         <field name="model">appointment.booking</field>
-        <field name="inherit_id" ref="reservation_module.view_appointment_booking_form"/>
+        <field name="inherit_id" ref="reservation_module.appointment_booking_view_form"/>
         <field name="arch" type="xml">
 
             <!-- 在 header 加入重發 LINE 通知按鈕 -->
@@ -36,7 +36,7 @@
     <record id="appointment_booking_view_tree_line" model="ir.ui.view">
         <field name="name">appointment.booking.tree.line</field>
         <field name="model">appointment.booking</field>
-        <field name="inherit_id" ref="reservation_module.view_appointment_booking_list"/>
+        <field name="inherit_id" ref="reservation_module.appointment_booking_view_list"/>
         <field name="arch" type="xml">
             <xpath expr="//field[@name='state']" position="after">
                 <field name="line_notification_sent" string="LINE" optional="show"/>
