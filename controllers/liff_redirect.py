@@ -49,25 +49,37 @@ class LiffRedirectController(http.Controller):
         if request.httprequest.method == 'GET':
             return self._render_liff_bridge_page(target)
 
-        # POST 處理
+        # POST 處理：接受 id_token（優先）或 access_token（備援）
         id_token = kwargs.get('id_token', '')
-        if not id_token:
-            # 嘗試從 JSON body 讀取
+        access_token = kwargs.get('access_token', '')
+        if not id_token and not access_token:
             try:
                 body = json.loads(request.httprequest.get_data(as_text=True))
                 id_token = body.get('id_token', '')
+                access_token = body.get('access_token', '')
             except (json.JSONDecodeError, UnicodeDecodeError):
                 pass
 
-        if not id_token:
-            _logger.warning('liff_redirect: 缺少 id_token')
+        if not id_token and not access_token:
+            _logger.warning('liff_redirect: 缺少 id_token 和 access_token')
             return request.redirect('/liff/member?error=no_token')
 
-        # 驗證 ID Token
+        # 驗證：優先 ID Token，備援 Access Token
         line_service = request.env['line.service'].sudo()
-        payload = line_service.verify_id_token(id_token)
+        payload = None
+
+        if id_token:
+            payload = line_service.verify_id_token(id_token)
+            if payload:
+                _logger.debug('liff_redirect: ID Token 驗證成功')
+
+        if not payload and access_token:
+            payload = line_service.verify_access_token(access_token)
+            if payload:
+                _logger.debug('liff_redirect: Access Token 驗證成功（備援）')
+
         if not payload:
-            _logger.warning('liff_redirect: ID Token 驗證失敗')
+            _logger.warning('liff_redirect: 所有 token 驗證失敗')
             return request.redirect('/liff/member?error=invalid_token')
 
         line_uid = payload.get('sub')

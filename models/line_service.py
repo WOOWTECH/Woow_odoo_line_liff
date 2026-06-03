@@ -115,6 +115,65 @@ class LineService(models.AbstractModel):
             return None
 
     # ------------------------------------------------------------------
+    # 公開方法：Access Token 驗證（ID Token 的備援方案）
+    # ------------------------------------------------------------------
+
+    def verify_access_token(self, access_token):
+        """用 LIFF Access Token 取得使用者 profile
+
+        當 liff.getIDToken() 回 null（openid scope 未開）時，
+        用 liff.getAccessToken() 取得的 access token 呼叫 LINE Profile API，
+        同樣可以取得 LINE UID、displayName、pictureUrl。
+
+        :param access_token: LIFF 取得的 access token
+        :return: 類似 ID Token payload 的 dict（含 sub, name, picture），
+                 失敗回 None
+        """
+        if not access_token:
+            return None
+
+        try:
+            # 先驗證 token 有效性
+            verify_resp = requests.get(
+                'https://api.line.me/oauth2/v2.1/verify',
+                params={'access_token': access_token},
+                timeout=10,
+            )
+            if verify_resp.status_code != 200:
+                _logger.warning(
+                    'Access Token 驗證失敗: status=%s, body=%s',
+                    verify_resp.status_code, verify_resp.text,
+                )
+                return None
+
+            # 用 access token 取得 profile
+            profile_resp = requests.get(
+                'https://api.line.me/v2/profile',
+                headers={'Authorization': f'Bearer {access_token}'},
+                timeout=10,
+            )
+            if profile_resp.status_code != 200:
+                _logger.warning(
+                    'Access Token Profile 取得失敗: status=%s, body=%s',
+                    profile_resp.status_code, profile_resp.text,
+                )
+                return None
+
+            profile = profile_resp.json()
+            # 轉換成類似 ID Token payload 的格式
+            payload = {
+                'sub': profile.get('userId', ''),
+                'name': profile.get('displayName', ''),
+                'picture': profile.get('pictureUrl', ''),
+            }
+            _logger.debug('Access Token 驗證成功: sub=%s', payload.get('sub'))
+            return payload
+
+        except requests.RequestException:
+            _logger.exception('Access Token 驗證時發生網路錯誤')
+            return None
+
+    # ------------------------------------------------------------------
     # 公開方法：Webhook 簽章驗證
     # ------------------------------------------------------------------
 

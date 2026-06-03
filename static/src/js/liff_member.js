@@ -22,6 +22,7 @@
 
     var liffReady = false;
     var cachedIdToken = null;
+    var cachedAccessToken = null;
 
     function onReady(fn) {
         if (document.readyState !== 'loading') fn();
@@ -46,12 +47,20 @@
             console.log('[LiffMember] init OK, loggedIn=' + loggedIn + ', inClient=' + inClient);
 
             if (loggedIn) {
-                // 快取 ID Token
+                // 快取 ID Token（需要 openid scope）
                 try {
                     cachedIdToken = liff.getIDToken();
                     console.log('[LiffMember] ID Token: ' + (cachedIdToken ? '有' : '無'));
                 } catch (e) {
                     console.warn('[LiffMember] getIDToken error', e);
+                }
+
+                // 快取 Access Token（備援，不需要 openid scope）
+                try {
+                    cachedAccessToken = liff.getAccessToken();
+                    console.log('[LiffMember] Access Token: ' + (cachedAccessToken ? '有' : '無'));
+                } catch (e) {
+                    console.warn('[LiffMember] getAccessToken error', e);
                 }
 
                 // 更新 UI
@@ -125,25 +134,43 @@
     function doRedirect(target) {
         // 嘗試取得最新 token
         var idToken = cachedIdToken;
+        var accessToken = cachedAccessToken;
+
         if (!idToken && typeof liff !== 'undefined' && liff.isLoggedIn()) {
             try { idToken = liff.getIDToken(); } catch (e) {}
         }
+        if (!accessToken && typeof liff !== 'undefined' && liff.isLoggedIn()) {
+            try { accessToken = liff.getAccessToken(); } catch (e) {}
+        }
 
-        if (idToken) {
-            // 有 ID Token → POST 到 liff_redirect（自動登入 Odoo）
-            console.log('[LiffMember] POST /liff/redirect/' + target);
+        if (idToken || accessToken) {
+            // 有任一 token → POST 到 liff_redirect（自動登入 Odoo）
+            console.log('[LiffMember] POST /liff/redirect/' + target +
+                ' (idToken=' + (idToken ? '有' : '無') +
+                ', accessToken=' + (accessToken ? '有' : '無') + ')');
             var form = document.createElement('form');
             form.method = 'POST';
             form.action = '/liff/redirect/' + target;
-            var input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'id_token';
-            input.value = idToken;
-            form.appendChild(input);
+
+            if (idToken) {
+                var input1 = document.createElement('input');
+                input1.type = 'hidden';
+                input1.name = 'id_token';
+                input1.value = idToken;
+                form.appendChild(input1);
+            }
+            if (accessToken) {
+                var input2 = document.createElement('input');
+                input2.type = 'hidden';
+                input2.name = 'access_token';
+                input2.value = accessToken;
+                form.appendChild(input2);
+            }
+
             document.body.appendChild(form);
             form.submit();
         } else {
-            // 無 ID Token → 直接跳轉目標頁面（不走自動登入）
+            // 完全沒有 token → 直接跳轉目標頁面（不走自動登入）
             var directUrl = DIRECT_URLS[target] || '/appointment/1/schedule';
             console.log('[LiffMember] 無 token，直接導向 ' + directUrl);
             window.location.href = directUrl;
