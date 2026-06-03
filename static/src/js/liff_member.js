@@ -1,8 +1,8 @@
 /**
  * woow_line_bridge/static/src/js/liff_member.js
  * 會員中心主入口頁 JavaScript
- * 流程：等待 LIFF init 完成 → 取得 profile → 啟用按鈕
- * 按鈕點擊：從 LIFF 取得 ID Token → POST 到 /liff/redirect/<target>
+ * 流程：LIFF init → 取得 ID Token（快取）→ 按鈕 POST redirect
+ * 重要：絕不呼叫 liff.login()，在 LINE 內 liff.init() 會自動登入
  */
 (function () {
     'use strict';
@@ -13,66 +13,56 @@
         return;
     }
 
-    // LIFF 初始化狀態
+    // 直接跳轉對照表（無 ID Token 時 fallback）
+    var DIRECT_URLS = {
+        'book': '/appointment/1/schedule',
+        'my-bookings': '/my/ext-bookings',
+        'profile': '/my/account'
+    };
+
     var liffReady = false;
     var cachedIdToken = null;
 
     function onReady(fn) {
-        if (document.readyState !== 'loading') {
-            fn();
-        } else {
-            document.addEventListener('DOMContentLoaded', fn);
-        }
+        if (document.readyState !== 'loading') fn();
+        else document.addEventListener('DOMContentLoaded', fn);
     }
 
     onReady(function () {
-        // 先綁按鈕（會等 liffReady）
         bindButtons();
-        // 再初始化 LIFF
         initLiff();
     });
 
     function initLiff() {
         if (typeof liff === 'undefined') {
             console.error('[LiffMember] LIFF SDK 未載入');
+            liffReady = true;
             return;
         }
 
         liff.init({ liffId: liffId }).then(function () {
-            console.log('[LiffMember] LIFF init 成功, isLoggedIn=' + liff.isLoggedIn() + ', isInClient=' + liff.isInClient());
+            var loggedIn = liff.isLoggedIn();
+            var inClient = liff.isInClient();
+            console.log('[LiffMember] init OK, loggedIn=' + loggedIn + ', inClient=' + inClient);
 
-            if (!liff.isLoggedIn()) {
-                if (liff.isInClient()) {
-                    // 在 LINE 內但未登入（不應發生），嘗試 login
-                    console.log('[LiffMember] LINE 內未登入，嘗試 login...');
-                    liff.login();
-                    return;
+            if (loggedIn) {
+                // 快取 ID Token
+                try {
+                    cachedIdToken = liff.getIDToken();
+                    console.log('[LiffMember] ID Token: ' + (cachedIdToken ? '有' : '無'));
+                } catch (e) {
+                    console.warn('[LiffMember] getIDToken error', e);
                 }
-                // 外部瀏覽器，不自動登入，按鈕走 GET 流程
-                console.log('[LiffMember] 外部瀏覽器，未登入');
-                liffReady = true;
-                return;
-            }
 
-            // 已登入，快取 ID Token
-            try {
-                cachedIdToken = liff.getIDToken();
-                console.log('[LiffMember] ID Token 取得成功');
-            } catch (err) {
-                console.error('[LiffMember] getIDToken 失敗', err);
+                // 更新 UI
+                liff.getProfile().then(updateUserUI).catch(function (e) {
+                    console.warn('[LiffMember] getProfile error', e);
+                });
             }
-
+            // 不管有沒有登入都標記 ready，絕不呼叫 liff.login()
             liffReady = true;
-
-            // 更新使用者資訊
-            liff.getProfile().then(function (profile) {
-                updateUserUI(profile);
-            }).catch(function (err) {
-                console.error('[LiffMember] getProfile 失敗', err);
-            });
         }).catch(function (err) {
-            console.error('[LiffMember] LIFF init 失敗', err);
-            // init 失敗也標記 ready，讓按鈕可以走 fallback
+            console.error('[LiffMember] init failed', err);
             liffReady = true;
         });
     }
@@ -84,7 +74,6 @@
                 'alt="' + (profile.displayName || '') + '" ' +
                 'style="width:64px;height:64px;border-radius:50%;object-fit:cover;" />';
         }
-
         var greetingEl = document.getElementById('liff-user-greeting');
         if (greetingEl && profile.displayName) {
             greetingEl.textContent = profile.displayName + '，歡迎光臨';
@@ -107,21 +96,6 @@
         }
     }
 
-    function postRedirect(target, idToken) {
-        var form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '/liff/redirect/' + target;
-
-        var input = document.createElement('input');
-        input.type = 'hidden';
-        input.name = 'id_token';
-        input.value = idToken;
-        form.appendChild(input);
-
-        document.body.appendChild(form);
-        form.submit();
-    }
-
     function bindRedirectButton(elementId, target) {
         var btn = document.getElementById(elementId);
         if (!btn) return;
@@ -129,31 +103,18 @@
         btn.addEventListener('click', function (e) {
             e.preventDefault();
 
-            // 如果 LIFF 還沒 ready，等一下再試
             if (!liffReady) {
-                console.log('[LiffMember] LIFF 尚未初始化，等待中...');
+                // 等 LIFF init 完成（最多 3 秒）
                 btn.style.opacity = '0.5';
-                btn.style.pointerEvents = 'none';
-
-                var checkInterval = setInterval(function () {
-                    if (liffReady) {
-                        clearInterval(checkInterval);
+                var waited = 0;
+                var iv = setInterval(function () {
+                    waited += 200;
+                    if (liffReady || waited >= 3000) {
+                        clearInterval(iv);
                         btn.style.opacity = '';
-                        btn.style.pointerEvents = '';
                         doRedirect(target);
                     }
                 }, 200);
-
-                // 3 秒超時，走 fallback
-                setTimeout(function () {
-                    clearInterval(checkInterval);
-                    btn.style.opacity = '';
-                    btn.style.pointerEvents = '';
-                    if (!liffReady) {
-                        console.warn('[LiffMember] LIFF init 超時，走 fallback');
-                        window.location.href = '/liff/redirect/' + target;
-                    }
-                }, 3000);
                 return;
             }
 
@@ -162,25 +123,30 @@
     }
 
     function doRedirect(target) {
-        // 優先用快取的 ID Token
+        // 嘗試取得最新 token
         var idToken = cachedIdToken;
-
-        // 嘗試即時取得（可能已更新）
         if (!idToken && typeof liff !== 'undefined' && liff.isLoggedIn()) {
-            try {
-                idToken = liff.getIDToken();
-            } catch (err) {
-                console.error('[LiffMember] getIDToken 失敗', err);
-            }
+            try { idToken = liff.getIDToken(); } catch (e) {}
         }
 
         if (idToken) {
-            console.log('[LiffMember] POST redirect to ' + target);
-            postRedirect(target, idToken);
+            // 有 ID Token → POST 到 liff_redirect（自動登入 Odoo）
+            console.log('[LiffMember] POST /liff/redirect/' + target);
+            var form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '/liff/redirect/' + target;
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'id_token';
+            input.value = idToken;
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
         } else {
-            // 無 ID Token（外部瀏覽器未登入），走 GET → bridge 頁面
-            console.log('[LiffMember] 無 ID Token，走 GET redirect to ' + target);
-            window.location.href = '/liff/redirect/' + target;
+            // 無 ID Token → 直接跳轉目標頁面（不走自動登入）
+            var directUrl = DIRECT_URLS[target] || '/appointment/1/schedule';
+            console.log('[LiffMember] 無 token，直接導向 ' + directUrl);
+            window.location.href = directUrl;
         }
     }
 
