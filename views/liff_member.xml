@@ -119,7 +119,7 @@
                 // LIFF ID 傳給前端 JS
                 window.__LIFF_ID__ = '<t t-esc="liff_id"/>';
             </script>
-            <script src="/woow_line_bridge/static/src/js/liff_member.js"></script>
+            <script src="/woow_line_bridge/static/src/js/liff_member.js?v=2"></script>
         </t>
     </template>
 
