@@ -1,24 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- woow_line_bridge/views/assets.xml -->
-<!-- ★ 偵測 ?liff=1 後注入 LIFF SDK，隱藏 Odoo header/footer -->
+<!-- ★ 偵測 ?liff=1 後注入 LIFF SDK 初始化腳本到 website layout -->
 <!-- 讓既有 portal 頁面在 LINE 內看起來像 App -->
 <odoo>
 
-    <!-- 注入 LIFF CSS 到既有 portal 頁面（含 markstudio 品牌色） -->
-    <template id="liff_assets_frontend" name="LIFF Frontend Assets"
-              inherit_id="web.assets_frontend" priority="99">
-        <xpath expr="." position="inside">
-            <link rel="stylesheet" href="/woow_line_bridge/static/src/css/liff_markstudio.css"/>
-        </xpath>
-    </template>
-
-    <!-- 注入 LIFF SDK 與初始化腳本到 website layout -->
+    <!-- 注入 LIFF 偵測腳本到 website layout -->
     <!-- 只在 ?liff=1 時啟用，由 liff_inject.js 偵測 -->
     <template id="liff_sdk_inject" name="LIFF SDK Inject"
               inherit_id="website.layout" priority="99">
         <xpath expr="//head" position="inside">
             <script>
-                // 偵測 ?liff=1 query string，標記 body class
+                // 偵測 ?liff=1 query string，標記 html class
                 (function() {
                     var params = new URLSearchParams(window.location.search);
                     if (params.get('liff') === '1') {
