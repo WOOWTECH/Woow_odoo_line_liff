@@ -11,7 +11,7 @@
         <field name="arch" type="xml">
             <xpath expr="//form" position="inside">
                 <app data-string="LINE LIFF" string="LINE LIFF"
-                     data-key="woow_line_bridge"
+                     name="woow_line_bridge" data-key="woow_line_bridge"
                      groups="woow_line_base.group_line_manager">
 
                     <block title="LIFF 設定" name="line_liff_settings">
