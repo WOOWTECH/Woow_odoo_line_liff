@@ -145,7 +145,7 @@ body{{font-family:'Noto Sans TC','Helvetica Neue',sans-serif;background:#000;min
 <div class="footer"><p>MARK STUDIO</p></div>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>window.__LIFF_ID__='{liff_id}';</script>
-<script src="/woow_line_bridge/static/src/js/liff_member.js?v=5"></script>
+<script src="/woow_line_bridge/static/src/js/liff_member.js?v=8"></script>
 </body></html>"""
 
     @http.route('/liff/news', type='http', auth='public', website=True)
