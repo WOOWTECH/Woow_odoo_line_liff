@@ -58,11 +58,12 @@ class LiffPagesController(http.Controller):
         使用 auth='none' 避免壞 session 導致 403。
         自己清除壞 session + 渲染頁面。
         """
-        # 清除壞 session（不會再 crash）
+        # 強制清除壞 session — 防止 uid=False 造成 SQL error
+        # (integer = boolean 型別不匹配會導致 403)
         try:
-            if request.session.uid:
-                request.session.uid = False
-                request.session.login = None
+            request.session.uid = None
+            request.session.login = None
+            request.session.session_token = None
         except Exception:
             pass
 
