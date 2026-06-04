@@ -38,45 +38,40 @@ class LiffPagesController(http.Controller):
     @http.route('/liff/clear-session', type='http', auth='none', csrf=False,
                 save_session=False)
     def liff_clear_session(self, **kwargs):
-        """清除壞掉的 session 並重導回 LIFF member 頁面
+        """清除壞掉的 session 並重導回目標頁面
 
         當 LIFF 登入產生壞 session 時，所有頁面都會 403。
-        這個 auth='none' 的端點不會觸發 session 驗證，
-        所以可以安全地清除 session 後重導。
+        save_session=False 讓 Odoo 不讀取 session，
+        然後回傳 Set-Cookie 清除壞 cookie。
         """
         redirect_to = kwargs.get('r', '/liff/member')
-        # 清除 session
-        request.session.uid = None
-        request.session.login = None
-        _logger.info('已清除壞 session，重導到 %s', redirect_to)
-        return request.redirect(redirect_to)
+        resp = request.redirect(redirect_to)
+        # 強制清除 session cookie — 讓下一次請求不帶壞 cookie
+        resp.delete_cookie('session_id')
+        return resp
 
-    @http.route('/liff/member', type='http', auth='none', website=False, csrf=False)
+    @http.route('/liff/member', type='http', auth='none', website=False,
+                csrf=False, save_session=False)
     def liff_member(self, **kwargs):
         """會員中心主入口頁
 
-        使用 auth='none' 避免壞 session 導致 403。
-        自己清除壞 session + 渲染頁面。
+        save_session=False 防止 Odoo 載入壞 session cookie。
+        如果之前的 LIFF 登入留下 uid=False 的壞 cookie，
+        Odoo middleware 會在 session 驗證時 crash (integer = boolean SQL error)。
+        加上 save_session=False 繞過這個問題。
         """
-        # 強制清除壞 session — 防止 uid=False 造成 SQL error
-        # (integer = boolean 型別不匹配會導致 403)
-        try:
-            request.session.uid = None
-            request.session.login = None
-            request.session.session_token = None
-        except Exception:
-            pass
-
         ICP = request.env['ir.config_parameter'].sudo()
         liff_id = ICP.get_param('woow_line_liff.liff_id_member', '')
         shop_name = ICP.get_param('woow_line_liff.shop_name', 'Mark Studio 馬克健身')
         error = kwargs.get('error', '')
 
-        # auth='none' 不能用 request.render()，用 inline HTML
-        return request.make_response(
+        resp = request.make_response(
             self._build_member_html(liff_id, shop_name, error),
             headers=[('Content-Type', 'text/html; charset=utf-8')],
         )
+        # 清除可能的壞 session cookie
+        resp.delete_cookie('session_id')
+        return resp
 
     def _build_member_html(self, liff_id, shop_name, error=''):
         """產生會員中心 HTML（Retrodandy 黑白極簡風格，與網站一致）"""
