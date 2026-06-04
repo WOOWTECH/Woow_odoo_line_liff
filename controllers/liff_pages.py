@@ -74,11 +74,17 @@ class LiffPagesController(http.Controller):
         return resp
 
     def _build_member_html(self, liff_id, shop_name, error=''):
-        """產生 LIFF fallback 頁面 — 自動關閉 LIFF 回到聊天室
+        """LIFF 入口頁 — 雙模式：認證橋 + fallback
 
-        這個頁面只在 fallback 時顯示（無 target、認證失敗等），
-        正常流程用戶不會看到此頁面（Rich Menu → 認證橋 → 直達 portal）。
+        模式 1（有 ?target= 或 ?liff.state=?target%3D）：
+          純認證橋 — spinner → LIFF init → 取 token → POST /liff/redirect/{target}
+          用戶只看到短暫 loading，然後直達 portal 頁面
+
+        模式 2（無 target 或認證失敗）：
+          fallback — 顯示店名 + 「返回聊天室」按鈕 + 自動 closeWindow
         """
+        import json as _json
+
         error_html = ''
         if error:
             error_msgs = {
@@ -89,15 +95,25 @@ class LiffPagesController(http.Controller):
             }
             error_html = f'<div class="err"><p>{error_msgs.get(error, error)}</p></div>'
 
+        # 認證橋的 fallback URL 對照表
+        direct_urls = {
+            'book': '/appointment/1/schedule',
+            'my-bookings': '/my/ext-bookings',
+            'profile': '/my/account',
+        }
+
         return f"""<!DOCTYPE html>
 <html lang="zh-TW"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{shop_name}</title>
-<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
 *{{margin:0;padding:0;box-sizing:border-box;}}
-body{{font-family:'Noto Sans TC',sans-serif;background:#FAF6F2;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#2D2620;}}
-.wrap{{text-align:center;padding:40px 24px;}}
+body{{font-family:-apple-system,BlinkMacSystemFont,'Noto Sans TC',sans-serif;background:#FAF6F2;min-height:100vh;display:flex;align-items:center;justify-content:center;color:#2D2620;}}
+.loading{{text-align:center;}}
+.spinner{{width:36px;height:36px;border:3px solid #E0D5C8;border-top-color:#B8956A;border-radius:50%;animation:r .7s linear infinite;margin:0 auto 14px;}}
+@keyframes r{{to{{transform:rotate(360deg)}}}}
+.loading-text{{font-size:14px;color:#6B5B4E;}}
+.fallback{{text-align:center;padding:40px 24px;display:none;}}
 .shop{{font-size:20px;font-weight:700;margin-bottom:8px;}}
 .msg{{font-size:14px;color:#6B5B4E;margin-bottom:24px;}}
 .err{{margin:0 24px 16px;padding:12px 16px;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;color:#991B1B;font-size:13px;text-align:center;}}
@@ -106,7 +122,11 @@ body{{font-family:'Noto Sans TC',sans-serif;background:#FAF6F2;min-height:100vh;
 .sub{{margin-top:16px;font-size:12px;color:#9B8E82;}}
 </style></head><body>
 {error_html}
-<div class="wrap">
+<div class="loading" id="loading-ui">
+  <div class="spinner"></div>
+  <p class="loading-text" id="status-text">載入中...</p>
+</div>
+<div class="fallback" id="fallback-ui">
   <p class="shop">{shop_name}</p>
   <p class="msg">請使用下方選單操作</p>
   <a class="btn" id="btn-close" href="#">
@@ -119,29 +139,67 @@ body{{font-family:'Noto Sans TC',sans-serif;background:#FAF6F2;min-height:100vh;
 <script>
 (function(){{
   var liffId='{liff_id}';
-  var btn=document.getElementById('btn-close');
+  var fallbacks={_json.dumps(direct_urls)};
+  var loadingEl=document.getElementById('loading-ui');
+  var fallbackEl=document.getElementById('fallback-ui');
+  var statusEl=document.getElementById('status-text');
 
-  // 嘗試自動關閉 LIFF 回到聊天室
-  if(liffId && typeof liff!=='undefined'){{
-    liff.init({{liffId:liffId}}).then(function(){{
-      if(liff.isInClient()){{
-        // 在 LINE 內 — 直接關閉 LIFF 視窗
-        liff.closeWindow();
-      }}
-    }}).catch(function(){{}});
+  // 解析 target：?target=X 或 LIFF 改寫的 ?liff.state=?target%3DX
+  function getTarget(){{
+    var p=new URLSearchParams(window.location.search);
+    var t=p.get('target');
+    if(t) return t;
+    var s=p.get('liff.state');
+    if(s){{var sp=new URLSearchParams(s.replace(/^\\?/,''));t=sp.get('target');if(t) return t;}}
+    return null;
   }}
 
-  // 按鈕點擊 — 嘗試關閉或導回
-  if(btn){{
-    btn.addEventListener('click',function(e){{
+  var target=getTarget();
+
+  // 模式 2：無 target → 顯示 fallback（返回聊天室）
+  if(!target){{
+    loadingEl.style.display='none';
+    fallbackEl.style.display='block';
+    // 嘗試自動關閉
+    if(liffId && typeof liff!=='undefined'){{
+      liff.init({{liffId:liffId}}).then(function(){{
+        if(liff.isInClient()) liff.closeWindow();
+      }}).catch(function(){{}});
+    }}
+    var btn=document.getElementById('btn-close');
+    if(btn) btn.addEventListener('click',function(e){{
       e.preventDefault();
-      if(typeof liff!=='undefined' && liff.isInClient && liff.isInClient()){{
-        liff.closeWindow();
-      }} else {{
-        window.close();
-      }}
+      if(typeof liff!=='undefined'&&liff.isInClient&&liff.isInClient()) liff.closeWindow();
+      else window.close();
     }});
+    return;
   }}
+
+  // 模式 1：有 target → 認證橋
+  statusEl.textContent='正在登入中...';
+
+  function goFallback(){{
+    var u=fallbacks[target];
+    if(u){{statusEl.textContent='正在跳轉...';window.location.href=u;}}
+    else{{loadingEl.style.display='none';fallbackEl.style.display='block';}}
+  }}
+
+  if(!liffId||typeof liff==='undefined'){{goFallback();return;}}
+
+  liff.init({{liffId:liffId}}).then(function(){{
+    if(!liff.isLoggedIn()){{goFallback();return;}}
+    var idToken=null,accessToken=null;
+    try{{idToken=liff.getIDToken();}}catch(e){{}}
+    try{{accessToken=liff.getAccessToken();}}catch(e){{}}
+    if(!idToken&&!accessToken){{goFallback();return;}}
+
+    // POST 到認證橋
+    statusEl.textContent='登入成功，跳轉中...';
+    var f=document.createElement('form');f.method='POST';f.action='/liff/redirect/'+target;
+    if(idToken){{var i=document.createElement('input');i.type='hidden';i.name='id_token';i.value=idToken;f.appendChild(i);}}
+    if(accessToken){{var a=document.createElement('input');a.type='hidden';a.name='access_token';a.value=accessToken;f.appendChild(a);}}
+    document.body.appendChild(f);f.submit();
+  }}).catch(function(){{goFallback();}});
 }})();
 </script>
 </body></html>"""
