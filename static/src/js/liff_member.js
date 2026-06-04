@@ -29,7 +29,32 @@
         else document.addEventListener('DOMContentLoaded', fn);
     }
 
+    // 檢查是否有 auto-redirect target（從 Rich Menu 來的）
+    // 如果有，立即隱藏主 UI 只顯示 loading，讓跳轉更流暢
+    function getAutoTarget() {
+        var params = new URLSearchParams(window.location.search);
+        var t = params.get('target');
+        if (t) return t;
+        var liffState = params.get('liff.state');
+        if (liffState) {
+            var stateParams = new URLSearchParams(liffState.replace(/^\?/, ''));
+            t = stateParams.get('target');
+            if (t) return t;
+        }
+        return null;
+    }
+    var pendingTarget = getAutoTarget();
+
     onReady(function () {
+        if (pendingTarget && DIRECT_URLS[pendingTarget]) {
+            // 隱藏主 UI，顯示 loading spinner
+            var grid = document.querySelector('.grid');
+            var footer = document.querySelector('.footer');
+            if (grid) grid.style.display = 'none';
+            if (footer) footer.style.display = 'none';
+            var greeting = document.getElementById('liff-user-greeting');
+            if (greeting) greeting.textContent = '跳轉中...';
+        }
         bindButtons();
         initLiff();
     });
@@ -63,34 +88,21 @@
                     console.warn('[LiffMember] getAccessToken error', e);
                 }
 
-                // 更新 UI
-                liff.getProfile().then(updateUserUI).catch(function (e) {
-                    console.warn('[LiffMember] getProfile error', e);
-                });
+                // 更新 UI（auto-redirect 時跳過，加速跳轉）
+                if (!pendingTarget) {
+                    liff.getProfile().then(updateUserUI).catch(function (e) {
+                        console.warn('[LiffMember] getProfile error', e);
+                    });
+                }
             }
             // 不管有沒有登入都標記 ready，絕不呼叫 liff.login()
             liffReady = true;
 
-            // Auto-redirect: Rich Menu 經由 LIFF URL 帶 ?target= 參數
-            // LIFF SDK 會把 ?target=X 改寫成 ?liff.state=?target%3DX
-            // 所以需要同時檢查兩種格式
-            var autoTarget = (function () {
-                var params = new URLSearchParams(window.location.search);
-                // 直接 ?target=X
-                var t = params.get('target');
-                if (t) return t;
-                // LIFF 改寫的 ?liff.state=?target%3DX
-                var liffState = params.get('liff.state');
-                if (liffState) {
-                    var stateParams = new URLSearchParams(liffState.replace(/^\?/, ''));
-                    t = stateParams.get('target');
-                    if (t) return t;
-                }
-                return null;
-            })();
-            if (autoTarget && DIRECT_URLS[autoTarget]) {
-                console.log('[LiffMember] Auto-redirect: target=' + autoTarget);
-                doRedirect(autoTarget);
+            // Auto-redirect: 使用頁面載入時就解析好的 pendingTarget
+            if (pendingTarget && DIRECT_URLS[pendingTarget]) {
+                console.log('[LiffMember] Auto-redirect: target=' + pendingTarget);
+                doRedirect(pendingTarget);
+                return; // 不需要更新 UI，直接跳轉
             }
         }).catch(function (err) {
             console.error('[LiffMember] init failed', err);
