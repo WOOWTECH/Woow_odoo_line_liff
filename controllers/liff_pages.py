@@ -74,78 +74,76 @@ class LiffPagesController(http.Controller):
         return resp
 
     def _build_member_html(self, liff_id, shop_name, error=''):
-        """產生會員中心 HTML（Retrodandy 黑白極簡風格，與網站一致）"""
+        """產生 LIFF fallback 頁面 — 自動關閉 LIFF 回到聊天室
+
+        這個頁面只在 fallback 時顯示（無 target、認證失敗等），
+        正常流程用戶不會看到此頁面（Rich Menu → 認證橋 → 直達 portal）。
+        """
         error_html = ''
         if error:
             error_msgs = {
-                'no_token': '登入失敗：缺少驗證資訊',
-                'invalid_token': '登入失敗：驗證過期，請重新開啟',
-                'login_failed': '登入失敗：請稍後再試',
+                'no_token': '登入逾時，請從選單重新操作',
+                'invalid_token': '驗證過期，請重新開啟',
+                'login_failed': '登入失敗，請稍後再試',
                 'user_creation_failed': '帳號建立失敗，請聯繫客服',
             }
-            error_html = f'<div class="liff-member-error"><p>{error_msgs.get(error, error)}</p></div>'
+            error_html = f'<div class="err"><p>{error_msgs.get(error, error)}</p></div>'
 
         return f"""<!DOCTYPE html>
 <html lang="zh-TW"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>LIFF Member Page | {shop_name}</title>
+<title>{shop_name}</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
 <style>
 *{{margin:0;padding:0;box-sizing:border-box;}}
-body{{font-family:'Noto Sans TC','Helvetica Neue',sans-serif;background:var(--liff-bg,#FAF6F2);min-height:100vh;color:var(--liff-text,#2D2620);}}
-.hdr{{background:var(--liff-header-bg,linear-gradient(135deg,#B8956A 0%,#8B6F47 100%));padding:32px 20px 24px;text-align:center;color:#fff;}}
-.hdr h1{{font-size:22px;font-weight:700;letter-spacing:.5px;margin-bottom:4px;}}
-.hdr p{{font-size:14px;opacity:.9;}}
-.avatar{{width:64px;height:64px;border-radius:50%;background:rgba(255,255,255,.2);margin:0 auto 12px;display:flex;align-items:center;justify-content:center;overflow:hidden;}}
-.avatar img{{width:64px;height:64px;border-radius:50%;object-fit:cover;}}
-.avatar svg{{width:48px;height:48px;}}
-.liff-member-error{{margin:12px 16px;padding:12px 16px;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;color:#991B1B;font-size:13px;}}
-.grid{{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:20px 16px;}}
-.card{{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px 8px;background:var(--liff-card-bg,#fff);border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,.06);text-decoration:none;color:var(--liff-text,#2D2620);min-height:100px;transition:transform .15s;}}
-.card:active{{transform:translateY(-2px);}}
-.card-icon{{width:48px;height:48px;background:var(--liff-icon-bg,#FAF6F2);border-radius:12px;display:flex;align-items:center;justify-content:center;margin-bottom:8px;}}
-.card-label{{font-size:13px;font-weight:600;text-align:center;}}
-.footer{{text-align:center;padding:20px;color:var(--liff-muted,#9B8E82);font-size:11px;}}
-@media(max-width:380px){{.grid{{grid-template-columns:repeat(2,1fr);}}}}
+body{{font-family:'Noto Sans TC',sans-serif;background:#FAF6F2;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;color:#2D2620;}}
+.wrap{{text-align:center;padding:40px 24px;}}
+.shop{{font-size:20px;font-weight:700;margin-bottom:8px;}}
+.msg{{font-size:14px;color:#6B5B4E;margin-bottom:24px;}}
+.err{{margin:0 24px 16px;padding:12px 16px;background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;color:#991B1B;font-size:13px;text-align:center;}}
+.btn{{display:inline-flex;align-items:center;gap:8px;padding:14px 32px;background:#06C755;color:#fff;border:none;border-radius:8px;font-size:16px;font-weight:600;cursor:pointer;text-decoration:none;}}
+.btn:active{{opacity:.85;}}
+.sub{{margin-top:16px;font-size:12px;color:#9B8E82;}}
 </style></head><body>
-<div class="hdr">
-  <div class="avatar" id="liff-user-avatar">
-    <svg viewBox="0 0 48 48" fill="none"><circle cx="24" cy="24" r="24" fill="rgba(255,255,255,.15)"/><circle cx="24" cy="18" r="8" fill="rgba(255,255,255,.3)"/><ellipse cx="24" cy="38" rx="14" ry="10" fill="rgba(255,255,255,.3)"/></svg>
-  </div>
-  <h1>{shop_name}</h1>
-  <p id="liff-user-greeting">歡迎光臨</p>
-</div>
 {error_html}
-<div class="grid">
-  <a class="card" id="btn-book" href="#">
-    <div class="card-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="12" y1="14" x2="12" y2="18"/><line x1="10" y1="16" x2="14" y2="16"/></svg></div>
-    <span class="card-label">立即預約</span>
+<div class="wrap">
+  <p class="shop">{shop_name}</p>
+  <p class="msg">請使用下方選單操作</p>
+  <a class="btn" id="btn-close" href="#">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+    返回聊天室
   </a>
-  <a class="card" id="btn-my-bookings" href="#">
-    <div class="card-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg></div>
-    <span class="card-label">我的預約</span>
-  </a>
-  <a class="card" id="btn-profile" href="#">
-    <div class="card-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>
-    <span class="card-label">個人資料</span>
-  </a>
-  <a class="card" href="/liff/news">
-    <div class="card-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg></div>
-    <span class="card-label">最新消息</span>
-  </a>
-  <a class="card" href="/liff/locations">
-    <div class="card-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
-    <span class="card-label">店家位置</span>
-  </a>
-  <a class="card" id="btn-contact" href="#">
-    <div class="card-icon"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 16.92z"/></svg></div>
-    <span class="card-label">聯絡我們</span>
-  </a>
+  <p class="sub">或從 Rich Menu 選擇功能</p>
 </div>
-<div class="footer"><p>Powered by WOOWTECH</p></div>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
-<script>window.__LIFF_ID__='{liff_id}';</script>
-<script src="/woow_line_bridge/static/src/js/liff_member.js?v=8"></script>
+<script>
+(function(){{
+  var liffId='{liff_id}';
+  var btn=document.getElementById('btn-close');
+
+  // 嘗試自動關閉 LIFF 回到聊天室
+  if(liffId && typeof liff!=='undefined'){{
+    liff.init({{liffId:liffId}}).then(function(){{
+      if(liff.isInClient()){{
+        // 在 LINE 內 — 直接關閉 LIFF 視窗
+        liff.closeWindow();
+      }}
+    }}).catch(function(){{}});
+  }}
+
+  // 按鈕點擊 — 嘗試關閉或導回
+  if(btn){{
+    btn.addEventListener('click',function(e){{
+      e.preventDefault();
+      if(typeof liff!=='undefined' && liff.isInClient && liff.isInClient()){{
+        liff.closeWindow();
+      }} else {{
+        window.close();
+      }}
+    }});
+  }}
+}})();
+</script>
 </body></html>"""
 
     @http.route('/liff/news', type='http', auth='public', website=True)
