@@ -30,7 +30,7 @@ class LiffPagesController(http.Controller):
                 request.session.logout(keep_db=True)
         except Exception:
             try:
-                request.session.uid = False
+                request.session.uid = None
                 request.session.login = None
             except Exception:
                 pass
@@ -46,7 +46,7 @@ class LiffPagesController(http.Controller):
         """
         redirect_to = kwargs.get('r', '/liff/member')
         # 清除 session
-        request.session.uid = False
+        request.session.uid = None
         request.session.login = None
         _logger.info('已清除壞 session，重導到 %s', redirect_to)
         return request.redirect(redirect_to)
