@@ -38,7 +38,7 @@ class LineFlexTemplate(models.AbstractModel):
     def _get_shop_name(self):
         """取得店家名稱"""
         return self.env['ir.config_parameter'].sudo().get_param(
-            'woow_line_bridge.shop_name', 'Mark Studio 馬克健身',
+            'woow_line_liff.shop_name', 'Mark Studio 馬克健身',
         )
 
     def _get_liff_id(self, page):
@@ -46,7 +46,7 @@ class LineFlexTemplate(models.AbstractModel):
 
         :param page: 頁面名稱（member / news / locations）
         """
-        key = f'woow_line_bridge.liff_id_{page}'
+        key = f'woow_line_liff.liff_id_{page}'
         return self.env['ir.config_parameter'].sudo().get_param(key, '')
 
     def _liff_url(self, page):

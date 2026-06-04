@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 # woow_line_bridge/controllers/liff_redirect.py
-# ★ LIFF → Portal 自動登入跳轉（整個整合的命脈）
+# LIFF -> Portal 自動登入跳轉（整個整合的命脈）
 # 流程：驗證 LINE ID Token → 找到/建立 portal user → session.authenticate → 302 redirect
+# line.service → line.api.service (from woow_line_base)
+# line.user (from woow_line_base)
 import json
 import logging
 import secrets
@@ -65,7 +67,7 @@ class LiffRedirectController(http.Controller):
             return request.redirect('/liff/member?error=no_token')
 
         # 驗證：優先 ID Token，備援 Access Token
-        line_service = request.env['line.service'].sudo()
+        line_service = request.env['line.api.service'].sudo()
         payload = None
 
         if id_token:
@@ -143,7 +145,7 @@ class LiffRedirectController(http.Controller):
         if not id_token:
             return request.redirect('/liff/member?error=no_token')
 
-        line_service = request.env['line.service'].sudo()
+        line_service = request.env['line.api.service'].sudo()
         payload = line_service.verify_id_token(id_token)
         if not payload:
             return request.redirect('/liff/member?error=invalid_token')
@@ -190,7 +192,7 @@ class LiffRedirectController(http.Controller):
         使用 auth='none' 所以不能用 request.render()，直接回 HTML。
         """
         ICP = request.env['ir.config_parameter'].sudo()
-        liff_id = ICP.get_param('woow_line_bridge.liff_id_member', '')
+        liff_id = ICP.get_param('woow_line_liff.liff_id_member', '')
 
         # 直接跳轉對照表（fallback）
         direct_urls = {

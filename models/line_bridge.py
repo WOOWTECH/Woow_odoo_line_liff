@@ -70,7 +70,7 @@ class LineBridge(models.AbstractModel):
                 'altText': f'預約確認 - {booking.name}',
                 'contents': flex,
             }]
-            self.env['line.service'].push(line_users, messages)
+            self.env['line.api.service'].push(line_users, messages)
             _logger.info('on_booking_confirmed: 已推播 booking %s', booking.name)
         except Exception:
             _logger.exception('on_booking_confirmed 推播失敗: booking %s', booking.name)
@@ -92,7 +92,7 @@ class LineBridge(models.AbstractModel):
                 'altText': f'預約已取消 - {booking.name}',
                 'contents': flex,
             }]
-            self.env['line.service'].push(line_users, messages)
+            self.env['line.api.service'].push(line_users, messages)
             _logger.info('on_booking_cancelled: 已推播 booking %s', booking.name)
         except Exception:
             _logger.exception('on_booking_cancelled 推播失敗: booking %s', booking.name)
@@ -113,7 +113,7 @@ class LineBridge(models.AbstractModel):
                 'altText': f'預約提醒 - {booking.name}（24小時前）',
                 'contents': flex,
             }]
-            self.env['line.service'].push(line_users, messages)
+            self.env['line.api.service'].push(line_users, messages)
             _logger.info('on_booking_reminded_24h: 已推播 booking %s', booking.name)
         except Exception:
             _logger.exception('on_booking_reminded_24h 推播失敗: booking %s', booking.name)
@@ -134,7 +134,7 @@ class LineBridge(models.AbstractModel):
                 'altText': f'預約提醒 - {booking.name}（2小時前）',
                 'contents': flex,
             }]
-            self.env['line.service'].push(line_users, messages)
+            self.env['line.api.service'].push(line_users, messages)
             _logger.info('on_booking_reminded_2h: 已推播 booking %s', booking.name)
         except Exception:
             _logger.exception('on_booking_reminded_2h 推播失敗: booking %s', booking.name)
@@ -183,7 +183,7 @@ class LineBridge(models.AbstractModel):
             return False
 
         try:
-            sent = self.env['line.service'].push(line_users, messages)
+            sent = self.env['line.api.service'].push(line_users, messages)
             return bool(sent)
         except Exception:
             _logger.exception('notify_partner 推播失敗: partner %s', partner.id)

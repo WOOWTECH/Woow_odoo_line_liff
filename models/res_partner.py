@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # woow_line_bridge/models/res_partner.py
-# 擴充 res.partner：加入 LINE 關聯欄位 + 馬克健身客戶管理欄位
+# 擴充 res.partner：馬克健身客戶管理欄位
+# LINE 用戶關聯（line_user_ids, has_line_bound）已移至 woow_line_base
 import logging
 
 from odoo import api, fields, models
@@ -12,28 +13,12 @@ class ResPartner(models.Model):
     """擴充 res.partner
 
     新增：
-    - LINE 用戶關聯（One2many）
-    - has_line_bound 計算欄位
     - 馬克健身特殊欄位（身體狀況、偏好時段）
     - push_to_line() 快捷方法
+
+    LINE 用戶關聯（line_user_ids, has_line_bound）由 woow_line_base 提供。
     """
     _inherit = 'res.partner'
-
-    # ------------------------------------------------------------------
-    # LINE 關聯
-    # ------------------------------------------------------------------
-    line_user_ids = fields.One2many(
-        'line.user',
-        'partner_id',
-        string='LINE 帳號',
-        help='綁定的 LINE 用戶帳號',
-    )
-    has_line_bound = fields.Boolean(
-        string='已綁定 LINE',
-        compute='_compute_has_line_bound',
-        store=True,
-        help='是否已綁定至少一個 LINE 帳號',
-    )
 
     # ------------------------------------------------------------------
     # 馬克健身客戶管理欄位
@@ -67,13 +52,6 @@ class ResPartner(models.Model):
     # ------------------------------------------------------------------
     # Computed fields
     # ------------------------------------------------------------------
-
-    @api.depends('line_user_ids', 'line_user_ids.is_follower')
-    def _compute_has_line_bound(self):
-        for partner in self:
-            partner.has_line_bound = bool(
-                partner.line_user_ids.filtered(lambda lu: lu.is_follower)
-            )
 
     @api.depends_context('lang')
     def _compute_visit_stats(self):

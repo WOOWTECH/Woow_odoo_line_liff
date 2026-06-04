@@ -2,6 +2,8 @@
 # woow_line_bridge/controllers/webhook.py
 # LINE Webhook 接收端點
 # 接收 LINE Platform 的 Webhook 事件，驗簽後非同步處理
+# line.service → line.api.service (from woow_line_base)
+# line.user, line.event.log (from woow_line_base)
 import json
 import logging
 
@@ -32,7 +34,7 @@ class LineWebhookController(http.Controller):
         signature = request.httprequest.headers.get('X-Line-Signature', '')
 
         # 驗證簽章
-        line_service = request.env['line.service'].sudo()
+        line_service = request.env['line.api.service'].sudo()
         if not line_service.verify_webhook_signature(body_bytes, signature):
             _logger.warning('Webhook 簽章驗證失敗')
             return Response('Invalid signature', status=403)
@@ -152,7 +154,7 @@ class LineWebhookController(http.Controller):
                     'altText': f'歡迎來到{request.env["line.flex.template"].sudo()._get_shop_name()}',
                     'contents': flex,
                 }]
-                request.env['line.service'].sudo().reply(reply_token, messages)
+                request.env['line.api.service'].sudo().reply(reply_token, messages)
             _logger.info('已發送歡迎訊息: %s', line_uid)
         except Exception:
             _logger.exception('發送歡迎訊息失敗: %s', line_uid)
@@ -190,7 +192,7 @@ class LineWebhookController(http.Controller):
         if not reply_token:
             return
 
-        line_service = request.env['line.service'].sudo()
+        line_service = request.env['line.api.service'].sudo()
         response_text = self._match_keyword(text.strip())
 
         if response_text:
@@ -213,7 +215,7 @@ class LineWebhookController(http.Controller):
         """
         import requests as http_requests
 
-        access_token = request.env['line.service'].sudo()._get_access_token()
+        access_token = request.env['line.api.service'].sudo()._get_access_token()
         if not access_token:
             return
 
@@ -240,15 +242,15 @@ class LineWebhookController(http.Controller):
         :return: 回覆文字，無比對回 None
         """
         ICP = request.env['ir.config_parameter'].sudo()
-        shop_name = ICP.get_param('woow_line_bridge.shop_name', 'Mark Studio 馬克健身')
-        shop_phone = ICP.get_param('woow_line_bridge.shop_phone', '')
-        shop_address = ICP.get_param('woow_line_bridge.shop_address', '')
+        shop_name = ICP.get_param('woow_line_liff.shop_name', 'Mark Studio 馬克健身')
+        shop_phone = ICP.get_param('woow_line_liff.shop_phone', '')
+        shop_address = ICP.get_param('woow_line_liff.shop_address', '')
 
         keywords = {
             '預約': f'請點擊下方選單的「立即預約」，或直接前往我們的預約頁面 🙌',
             '電話': f'{shop_name} 電話：{shop_phone}' if shop_phone else f'請透過 LINE 與我們聯繫',
             '地址': f'{shop_name} 地址：{shop_address}' if shop_address else f'請透過 LINE 與我們聯繫',
-            '營業時間': ICP.get_param('woow_line_bridge.shop_opening_hours', '請透過 LINE 與我們聯繫'),
+            '營業時間': ICP.get_param('woow_line_liff.shop_opening_hours', '請透過 LINE 與我們聯繫'),
             '你好': f'您好！歡迎來到{shop_name} 😊\n有任何問題歡迎隨時詢問！',
             '哈囉': f'您好！歡迎來到{shop_name} 😊\n有任何問題歡迎隨時詢問！',
             'hi': f'您好！歡迎來到{shop_name} 😊\n有任何問題歡迎隨時詢問！',

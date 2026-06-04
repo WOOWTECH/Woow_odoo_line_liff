@@ -1,70 +1,47 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- woow_line_bridge/data/ir_config_parameter.xml -->
-<!-- LINE Bridge 系統參數預設值 -->
+<!-- LIFF + 店家資訊系統參數預設值 -->
+<!-- LINE Login / Messaging API 金鑰已移至 woow_line_base -->
 <odoo>
     <data noupdate="1">
 
-        <!-- LINE Login Channel -->
-        <record id="config_login_channel_id" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.login_channel_id</field>
-            <field name="value"></field>
-        </record>
-        <record id="config_login_channel_secret" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.login_channel_secret</field>
-            <field name="value"></field>
-        </record>
-
-        <!-- LINE Messaging API Channel -->
-        <record id="config_messaging_channel_id" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.messaging_channel_id</field>
-            <field name="value"></field>
-        </record>
-        <record id="config_messaging_channel_secret" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.messaging_channel_secret</field>
-            <field name="value"></field>
-        </record>
-        <record id="config_messaging_access_token" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.messaging_access_token</field>
-            <field name="value"></field>
-        </record>
-
         <!-- LIFF ID -->
         <record id="config_liff_id_member" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.liff_id_member</field>
+            <field name="key">woow_line_liff.liff_id_member</field>
             <field name="value"></field>
         </record>
         <record id="config_liff_id_news" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.liff_id_news</field>
+            <field name="key">woow_line_liff.liff_id_news</field>
             <field name="value"></field>
         </record>
         <record id="config_liff_id_locations" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.liff_id_locations</field>
+            <field name="key">woow_line_liff.liff_id_locations</field>
             <field name="value"></field>
         </record>
 
         <!-- 店家資訊 -->
         <record id="config_shop_name" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.shop_name</field>
+            <field name="key">woow_line_liff.shop_name</field>
             <field name="value">Mark Studio 馬克健身</field>
         </record>
         <record id="config_shop_address" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.shop_address</field>
+            <field name="key">woow_line_liff.shop_address</field>
             <field name="value"></field>
         </record>
         <record id="config_shop_phone" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.shop_phone</field>
+            <field name="key">woow_line_liff.shop_phone</field>
             <field name="value"></field>
         </record>
         <record id="config_shop_latitude" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.shop_latitude</field>
+            <field name="key">woow_line_liff.shop_latitude</field>
             <field name="value"></field>
         </record>
         <record id="config_shop_longitude" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.shop_longitude</field>
+            <field name="key">woow_line_liff.shop_longitude</field>
             <field name="value"></field>
         </record>
         <record id="config_shop_opening_hours" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.shop_opening_hours</field>
+            <field name="key">woow_line_liff.shop_opening_hours</field>
             <field name="value"></field>
         </record>
 

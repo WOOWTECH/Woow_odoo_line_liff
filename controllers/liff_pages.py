@@ -2,6 +2,7 @@
 # woow_line_bridge/controllers/liff_pages.py
 # 自建 LIFF 頁面 Controller
 # 渲染：會員中心 /liff/member、最新消息 /liff/news、店家位置 /liff/locations
+# Config keys: woow_line_bridge.* → woow_line_liff.*
 import logging
 
 from odoo import http
@@ -66,8 +67,8 @@ class LiffPagesController(http.Controller):
             pass
 
         ICP = request.env['ir.config_parameter'].sudo()
-        liff_id = ICP.get_param('woow_line_bridge.liff_id_member', '')
-        shop_name = ICP.get_param('woow_line_bridge.shop_name', 'Mark Studio 馬克健身')
+        liff_id = ICP.get_param('woow_line_liff.liff_id_member', '')
+        shop_name = ICP.get_param('woow_line_liff.shop_name', 'Mark Studio 馬克健身')
         error = kwargs.get('error', '')
 
         # auth='none' 不能用 request.render()，用 inline HTML
@@ -155,7 +156,7 @@ body{{font-family:'Noto Sans TC',sans-serif;background:#FAF6F2;min-height:100vh;
     def liff_news(self, **kwargs):
         """最新消息頁（Phase 3 補完內容）"""
         ICP = request.env['ir.config_parameter'].sudo()
-        shop_name = ICP.get_param('woow_line_bridge.shop_name', 'Mark Studio 馬克健身')
+        shop_name = ICP.get_param('woow_line_liff.shop_name', 'Mark Studio 馬克健身')
 
         values = {
             'shop_name': shop_name,
@@ -166,12 +167,12 @@ body{{font-family:'Noto Sans TC',sans-serif;background:#FAF6F2;min-height:100vh;
     def liff_locations(self, **kwargs):
         """店家位置頁（Phase 3 補完地圖）"""
         ICP = request.env['ir.config_parameter'].sudo()
-        shop_name = ICP.get_param('woow_line_bridge.shop_name', 'Mark Studio 馬克健身')
-        shop_address = ICP.get_param('woow_line_bridge.shop_address', '')
-        shop_phone = ICP.get_param('woow_line_bridge.shop_phone', '')
-        shop_lat = ICP.get_param('woow_line_bridge.shop_latitude', '')
-        shop_lng = ICP.get_param('woow_line_bridge.shop_longitude', '')
-        shop_hours = ICP.get_param('woow_line_bridge.shop_opening_hours', '')
+        shop_name = ICP.get_param('woow_line_liff.shop_name', 'Mark Studio 馬克健身')
+        shop_address = ICP.get_param('woow_line_liff.shop_address', '')
+        shop_phone = ICP.get_param('woow_line_liff.shop_phone', '')
+        shop_lat = ICP.get_param('woow_line_liff.shop_latitude', '')
+        shop_lng = ICP.get_param('woow_line_liff.shop_longitude', '')
+        shop_hours = ICP.get_param('woow_line_liff.shop_opening_hours', '')
 
         values = {
             'shop_name': shop_name,
@@ -185,9 +186,9 @@ body{{font-family:'Noto Sans TC',sans-serif;background:#FAF6F2;min-height:100vh;
 
     @http.route('/liff/debug', type='http', auth='public', website=False, csrf=False)
     def liff_debug(self, **kwargs):
-        """LIFF 診斷頁面 — 在 LINE 內開啟看 LIFF SDK 狀態"""
+        """LIFF 診斷頁面 -- 在 LINE 內開啟看 LIFF SDK 狀態"""
         ICP = request.env['ir.config_parameter'].sudo()
-        liff_id = ICP.get_param('woow_line_bridge.liff_id_member', '')
+        liff_id = ICP.get_param('woow_line_liff.liff_id_member', '')
 
         html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">

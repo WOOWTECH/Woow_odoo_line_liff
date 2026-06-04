@@ -14,13 +14,13 @@
             <xpath expr="//header" position="inside">
                 <button name="action_resend_line_notification" type="object"
                         string="重發 LINE 通知" class="btn-secondary"
-                        groups="woow_line_bridge.group_line_manager"
+                        groups="woow_line_base.group_line_manager"
                         invisible="state != 'confirmed'"/>
             </xpath>
 
             <!-- 在表單底部加入 LINE 通知狀態 -->
             <xpath expr="//sheet" position="inside">
-                <group string="LINE 通知狀態" groups="woow_line_bridge.group_line_user">
+                <group string="LINE 通知狀態" groups="woow_line_base.group_line_user">
                     <group>
                         <field name="line_notification_sent"/>
                         <field name="line_reminder_24h_sent"/>
