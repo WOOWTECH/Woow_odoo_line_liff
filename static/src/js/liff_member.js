@@ -70,6 +70,15 @@
             }
             // 不管有沒有登入都標記 ready，絕不呼叫 liff.login()
             liffReady = true;
+
+            // Auto-redirect: 如果 URL 帶 ?target= 參數（從 Rich Menu 來的）
+            // 自動觸發對應的跳轉流程，不需用戶再點一次
+            var urlParams = new URLSearchParams(window.location.search);
+            var autoTarget = urlParams.get('target');
+            if (autoTarget && DIRECT_URLS[autoTarget]) {
+                console.log('[LiffMember] Auto-redirect: target=' + autoTarget);
+                doRedirect(autoTarget);
+            }
         }).catch(function (err) {
             console.error('[LiffMember] init failed', err);
             liffReady = true;
