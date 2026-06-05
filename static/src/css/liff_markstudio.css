@@ -126,38 +126,6 @@
 }
 
 /* ============================================================
-   LIFF 模式下的 Portal 頁面調整（馬克品牌色）
-   ============================================================ */
-html.liff-mode .o_portal_wrap {
-    background-color: #FAF6F2;
-}
-
-html.liff-mode .o_portal .breadcrumb {
-    background-color: #FAF6F2;
-    padding: 8px 16px;
-}
-
-html.liff-mode .btn-primary,
-html.liff-mode .o_portal .btn-primary {
-    background-color: #B8956A;
-    border-color: #B8956A;
-}
-
-html.liff-mode .btn-primary:hover,
-html.liff-mode .o_portal .btn-primary:hover {
-    background-color: #8B6F47;
-    border-color: #8B6F47;
-}
-
-html.liff-mode a {
-    color: #B8956A;
-}
-
-html.liff-mode a:hover {
-    color: #8B6F47;
-}
-
-/* ============================================================
    響應式調整
    ============================================================ */
 @media (max-width: 380px) {

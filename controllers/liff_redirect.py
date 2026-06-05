@@ -24,7 +24,7 @@ class LiffRedirectController(http.Controller):
     3. 後端驗證 ID Token → 取得 LINE UID
     4. 查找或建立 line.user → 查找或建立 portal user
     5. request.session.authenticate() 建立 session
-    6. 302 redirect 到目標 URL，附加 ?liff=1
+    6. 302 redirect 到目標 URL
 
     支援的 target：
     - book → /appointment/1/schedule
@@ -115,10 +115,8 @@ class LiffRedirectController(http.Controller):
             _logger.exception('liff_redirect: session.authenticate 失敗')
             return request.redirect('/liff/member?error=login_failed')
 
-        # 決定 redirect 目標
+        # 決定 redirect 目標（不附加 ?liff=1，保留原始網站完整頁面樣式）
         redirect_url = self._get_redirect_url(target, kwargs)
-        separator = '&' if '?' in redirect_url else '?'
-        redirect_url = f'{redirect_url}{separator}liff=1'
 
         _logger.info(
             'liff_redirect: LINE %s → user %s → %s',
@@ -179,7 +177,7 @@ class LiffRedirectController(http.Controller):
             return request.redirect('/liff/member?error=login_failed')
 
         # 跳轉到預約詳情
-        redirect_url = f'/my/ext-bookings/{booking_id}?liff=1'
+        redirect_url = f'/my/ext-bookings/{booking_id}'
         return request.redirect(redirect_url)
 
     # ------------------------------------------------------------------

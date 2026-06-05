@@ -5,28 +5,6 @@
  */
 
 /* ============================================================
-   LIFF 模式：隱藏 Odoo header/footer
-   ============================================================ */
-html.liff-mode header,
-html.liff-mode nav.navbar,
-html.liff-mode .o_main_navbar,
-html.liff-mode footer,
-html.liff-mode .o_portal_navbar,
-html.liff-mode #top_menu_container,
-html.liff-mode #oe_main_menu_navbar {
-    display: none !important;
-}
-
-html.liff-mode #wrapwrap {
-    padding-top: 0 !important;
-    margin-top: 0 !important;
-}
-
-html.liff-mode .o_portal_wrap {
-    padding-top: 0 !important;
-}
-
-/* ============================================================
    LIFF Container
    ============================================================ */
 .liff-container {
