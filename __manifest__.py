@@ -1,23 +1,22 @@
 # -*- coding: utf-8 -*-
 # woow_line_bridge/__manifest__.py
-# LINE LIFF 整合模組 - Odoo 18 CE
-# 依賴 woow_line_base 提供 LINE API 客戶端、用戶管理、事件/推播記錄
-# 本模組提供 LIFF 頁面、Portal 自動登入跳轉、預約通知 hook
+# LINE 整合模組 - Odoo 18 CE
+# 提供 LINE 用戶綁定、Webhook 接收、推播、LIFF 入口頁、事件 hook
 {
     'name': 'WOOW LINE Bridge',
-    'version': '18.0.2.0.0',
+    'version': '18.0.1.0.0',
     'category': 'Marketing',
-    'summary': 'LINE LIFF 整合層：LIFF 頁面、Portal 跳轉、預約通知 hook',
+    'summary': 'LINE 平台整合層：用戶綁定、LIFF、推播、Webhook',
     'description': """
         WOOW LINE Bridge
         =================
-        LINE LIFF 整合模組，依賴 woow_line_base，提供：
+        LINE 平台整合模組，提供：
+        - LINE 用戶與 Odoo partner 綁定
         - LIFF 頁面（會員中心、最新消息、店家位置）
         - LIFF → Portal 自動登入跳轉
+        - Webhook 事件處理（follow / unfollow / message）
+        - LINE Messaging API 推播
         - 預約事件 LINE 通知 hook
-        - Flex Message 模板工廠（Mark Studio 品牌）
-
-        LINE API 客戶端、用戶管理、事件/推播記錄由 woow_line_base 提供。
 
         首個部署客戶：Mark Studio 馬克健身
     """,
@@ -25,13 +24,19 @@
     'website': 'https://woowtech.io',
     'license': 'LGPL-3',
     'depends': [
-        'woow_line_base',
+        'base',
+        'web',
         'website',
         'portal',
+        'mail',
         'reservation_module',
     ],
+    'external_dependencies': {
+        'python': ['requests'],
+    },
     'data': [
         # 1. 安全性
+        'security/line_security.xml',
         'security/ir.model.access.csv',
         # 2. 資料
         'data/ir_config_parameter.xml',
@@ -41,13 +46,15 @@
         'data/mail_template.xml',
         # 3. 視圖
         'views/liff_base.xml',
-        'views/liff_member.xml',
         'views/liff_news.xml',
         'views/liff_locations.xml',
         'views/assets.xml',
+        'views/line_logs_views.xml',
+        'views/line_user_views.xml',
         'views/res_partner_views.xml',
         'views/appointment_booking_views.xml',
         'views/res_config_settings_views.xml',
+        'views/line_news_views.xml',
         'views/menus.xml',
     ],
     'assets': {
@@ -55,7 +62,6 @@
             'woow_line_bridge/static/src/js/liff_helper.js',
             'woow_line_bridge/static/src/js/liff_inject.js',
             'woow_line_bridge/static/src/css/liff.css',
-            'woow_line_bridge/static/src/css/liff_markstudio.css',
         ],
     },
     'application': True,

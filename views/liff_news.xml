@@ -1,15 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- woow_line_bridge/views/liff_news.xml -->
-<!-- 最新消息 LIFF 頁面（Phase 3 補完動態內容） -->
+<!-- 最新消息 LIFF 頁面 -->
 <odoo>
 
+    <!-- 新聞列表頁 -->
     <template id="liff_news_page" name="LIFF News Page">
         <t t-call="woow_line_bridge.liff_layout">
             <div class="liff-news">
 
                 <!-- 頂部 -->
                 <div class="liff-page-header">
-                    <a href="/liff/member" class="liff-back-btn">
+                    <a href="javascript:history.back()" class="liff-back-btn">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2D2620" stroke-width="2">
                             <polyline points="15 18 9 12 15 6"/>
                         </svg>
@@ -17,15 +18,78 @@
                     <h1 class="liff-page-title">最新消息</h1>
                 </div>
 
-                <!-- 消息列表（Phase 3 補完動態載入） -->
+                <!-- 消息列表 -->
                 <div class="liff-news-list">
-                    <div class="liff-news-empty">
-                        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#B8956A" stroke-width="1.5">
-                            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-                            <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                    <t t-if="news_list">
+                        <t t-foreach="news_list" t-as="article">
+                            <a t-attf-href="/liff/news?article_id=#{article.id}" class="liff-news-card">
+                                <t t-if="article.image">
+                                    <img t-attf-src="/web/image/line.news/#{article.id}/image/80x80"
+                                         class="liff-news-card-img" alt="" loading="lazy"/>
+                                </t>
+                                <t t-elif="article.image_url">
+                                    <img t-att-src="article.image_url"
+                                         class="liff-news-card-img" alt="" loading="lazy"/>
+                                </t>
+                                <div class="liff-news-card-body">
+                                    <h3 class="liff-news-card-title" t-esc="article.title"/>
+                                    <p class="liff-news-card-date" t-esc="article.published_date"/>
+                                    <t t-if="article.summary">
+                                        <p class="liff-news-card-summary" t-esc="article.summary"/>
+                                    </t>
+                                </div>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none"
+                                     stroke="#9B8E82" stroke-width="2" class="liff-news-card-arrow">
+                                    <polyline points="9 18 15 12 9 6"/>
+                                </svg>
+                            </a>
+                        </t>
+                    </t>
+                    <t t-else="">
+                        <div class="liff-news-empty">
+                            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#B8956A" stroke-width="1.5">
+                                <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+                                <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+                            </svg>
+                            <p>目前沒有最新消息</p>
+                            <p class="liff-news-empty-sub">稍後再來看看吧！</p>
+                        </div>
+                    </t>
+                </div>
+
+            </div>
+        </t>
+    </template>
+
+    <!-- 新聞詳情頁 -->
+    <template id="liff_news_detail" name="LIFF News Detail">
+        <t t-call="woow_line_bridge.liff_layout">
+            <div class="liff-news">
+
+                <!-- 頂部 -->
+                <div class="liff-page-header">
+                    <a href="/liff/news" class="liff-back-btn">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2D2620" stroke-width="2">
+                            <polyline points="15 18 9 12 15 6"/>
                         </svg>
-                        <p>目前沒有最新消息</p>
-                        <p class="liff-news-empty-sub">稍後再來看看吧！</p>
+                    </a>
+                    <h1 class="liff-page-title">最新消息</h1>
+                </div>
+
+                <!-- 文章內容 -->
+                <div class="liff-news-detail">
+                    <t t-if="article.image">
+                        <img t-attf-src="/web/image/line.news/#{article.id}/image"
+                             class="liff-news-detail-hero" alt="" loading="lazy"/>
+                    </t>
+                    <t t-elif="article.image_url">
+                        <img t-att-src="article.image_url"
+                             class="liff-news-detail-hero" alt="" loading="lazy"/>
+                    </t>
+                    <div class="liff-news-detail-content">
+                        <h2 class="liff-news-detail-title" t-esc="article.title"/>
+                        <p class="liff-news-detail-date" t-esc="article.published_date"/>
+                        <div class="liff-news-detail-body" t-raw="article.body"/>
                     </div>
                 </div>
 

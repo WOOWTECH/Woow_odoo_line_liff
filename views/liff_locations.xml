@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- woow_line_bridge/views/liff_locations.xml -->
-<!-- 店家位置 LIFF 頁面（Phase 3 補完地圖整合） -->
+<!-- 店家位置 LIFF 頁面（含 Leaflet 地圖整合） -->
 <odoo>
 
     <template id="liff_locations_page" name="LIFF Locations Page">
@@ -9,13 +9,24 @@
 
                 <!-- 頂部 -->
                 <div class="liff-page-header">
-                    <a href="/liff/member" class="liff-back-btn">
+                    <a href="javascript:history.back()" class="liff-back-btn">
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2D2620" stroke-width="2">
                             <polyline points="15 18 9 12 15 6"/>
                         </svg>
                     </a>
                     <h1 class="liff-page-title">店家位置</h1>
                 </div>
+
+                <!-- 地圖（Leaflet + OpenStreetMap） -->
+                <t t-if="shop_latitude and shop_longitude">
+                    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+                    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                    <div class="liff-location-map" id="liff-map"
+                         t-att-data-lat="shop_latitude"
+                         t-att-data-lng="shop_longitude"
+                         t-att-data-name="shop_name">
+                    </div>
+                </t>
 
                 <!-- 店家資訊卡 -->
                 <div class="liff-location-card">
@@ -64,18 +75,8 @@
                     </t>
                 </div>
 
-                <!-- 地圖預覽（Phase 3 補完 Google Maps embed） -->
-                <t t-if="shop_latitude and shop_longitude">
-                    <div class="liff-location-map" id="liff-map"
-                         t-att-data-lat="shop_latitude"
-                         t-att-data-lng="shop_longitude">
-                        <div class="liff-map-placeholder">
-                            <p>地圖載入中...</p>
-                        </div>
-                    </div>
-                </t>
-
             </div>
+            <script src="/woow_line_bridge/static/src/js/liff_locations.js"></script>
         </t>
     </template>
 

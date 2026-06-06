@@ -1,9 +1,7 @@
 # -*- coding: utf-8 -*-
 # woow_line_bridge/controllers/liff_redirect.py
-# LIFF -> Portal 自動登入跳轉（整個整合的命脈）
+# ★ LIFF → Portal 自動登入跳轉（整個整合的命脈）
 # 流程：驗證 LINE ID Token → 找到/建立 portal user → session.authenticate → 302 redirect
-# line.service → line.api.service (from woow_line_base)
-# line.user (from woow_line_base)
 import json
 import logging
 import secrets
@@ -24,13 +22,13 @@ class LiffRedirectController(http.Controller):
     3. 後端驗證 ID Token → 取得 LINE UID
     4. 查找或建立 line.user → 查找或建立 portal user
     5. request.session.authenticate() 建立 session
-    6. 302 redirect 到目標 URL
+    6. 302 redirect 到目標 URL，附加 ?liff=1
 
     支援的 target：
     - book → /appointment/1/schedule
     - my-bookings → /my/ext-bookings
     - profile → /my/account
-    - booking/<id> → /appointment/booking/<id>/confirm
+    - booking/<id> → /my/ext-bookings/<id>
     """
 
     # 目標 URL 對照表
@@ -40,18 +38,19 @@ class LiffRedirectController(http.Controller):
         'profile': '/my/account',
     }
 
-    @http.route('/liff/redirect/<string:target>', type='http', auth='none',
-                methods=['GET', 'POST'], website=False, csrf=False)
-    def liff_redirect(self, target, **kwargs):
-        """LIFF 自動登入跳轉端點
+    # ------------------------------------------------------------------
+    # 共用認證邏輯（DRY：從 liff_redirect + liff_redirect_booking 提取）
+    # ------------------------------------------------------------------
 
-        GET: 返回中間頁，前端 JS 取得 ID Token 後 POST 回來
-        POST: 驗證 ID Token，建立 session，302 redirect
+    def _authenticate_liff_user(self, **kwargs):
+        """驗證 LIFF token 並建立 Odoo session
+
+        從 POST body 或 kwargs 取得 id_token/access_token，
+        驗證後建立/更新 LINE 用戶、確保 portal user、authenticate session。
+
+        :return: (user, None) on success, (None, redirect_response) on failure
         """
-        if request.httprequest.method == 'GET':
-            return self._render_liff_bridge_page(target)
-
-        # POST 處理：接受 id_token（優先）或 access_token（備援）
+        # 取得 token
         id_token = kwargs.get('id_token', '')
         access_token = kwargs.get('access_token', '')
         if not id_token and not access_token:
@@ -64,10 +63,10 @@ class LiffRedirectController(http.Controller):
 
         if not id_token and not access_token:
             _logger.warning('liff_redirect: 缺少 id_token 和 access_token')
-            return request.redirect('/liff/member?error=no_token')
+            return None, request.redirect('/web/login?error=no_token')
 
         # 驗證：優先 ID Token，備援 Access Token
-        line_service = request.env['line.api.service'].sudo()
+        line_service = request.env['line.service'].sudo()
         payload = None
 
         if id_token:
@@ -82,22 +81,22 @@ class LiffRedirectController(http.Controller):
 
         if not payload:
             _logger.warning('liff_redirect: 所有 token 驗證失敗')
-            return request.redirect('/liff/member?error=invalid_token')
+            return None, request.redirect('/web/login?error=invalid_token')
 
         line_uid = payload.get('sub')
         if not line_uid:
-            return request.redirect('/liff/member?error=no_uid')
+            return None, request.redirect('/web/login?error=no_uid')
 
         # 建立或更新 LINE 用戶
         LineUser = request.env['line.user'].sudo()
         line_user = LineUser.create_or_update_from_liff(payload)
         if not line_user:
-            return request.redirect('/liff/member?error=user_creation_failed')
+            return None, request.redirect('/web/login?error=user_creation_failed')
 
         # 確保有對應的 portal user
         partner, user = self._ensure_portal_user(line_user, payload)
         if not user:
-            return request.redirect('/liff/member?error=login_failed')
+            return None, request.redirect('/web/login?error=login_failed')
 
         # 建立 session：Odoo 18 authenticate(db, credential_dict)
         db = request.env.cr.dbname
@@ -113,14 +112,36 @@ class LiffRedirectController(http.Controller):
             })
         except Exception:
             _logger.exception('liff_redirect: session.authenticate 失敗')
-            return request.redirect('/liff/member?error=login_failed')
+            return None, request.redirect('/web/login?error=login_failed')
 
-        # 決定 redirect 目標（不附加 ?liff=1，保留原始網站完整頁面樣式）
+        return user, None
+
+    # ------------------------------------------------------------------
+    # 路由
+    # ------------------------------------------------------------------
+
+    @http.route('/liff/redirect/<string:target>', type='http', auth='none',
+                methods=['GET', 'POST'], website=False, csrf=False)
+    def liff_redirect(self, target, **kwargs):
+        """LIFF 自動登入跳轉端點
+
+        GET: 返回中間頁，前端 JS 取得 ID Token 後 POST 回來
+        POST: 驗證 ID Token，建立 session，302 redirect
+        """
+        if request.httprequest.method == 'GET':
+            return self._render_liff_bridge_page(target)
+
+        user, error = self._authenticate_liff_user(**kwargs)
+        if error:
+            return error
+
         redirect_url = self._get_redirect_url(target, kwargs)
+        separator = '&' if '?' in redirect_url else '?'
+        redirect_url = f'{redirect_url}{separator}liff=1'
 
         _logger.info(
-            'liff_redirect: LINE %s → user %s → %s',
-            line_uid, user.login, redirect_url,
+            'liff_redirect: LINE → user %s → %s',
+            user.login, redirect_url,
         )
         return request.redirect(redirect_url)
 
@@ -131,53 +152,11 @@ class LiffRedirectController(http.Controller):
         if request.httprequest.method == 'GET':
             return self._render_liff_bridge_page(f'booking/{booking_id}')
 
-        # POST 處理（同上邏輯）
-        id_token = kwargs.get('id_token', '')
-        if not id_token:
-            try:
-                body = json.loads(request.httprequest.get_data(as_text=True))
-                id_token = body.get('id_token', '')
-            except (json.JSONDecodeError, UnicodeDecodeError):
-                pass
+        user, error = self._authenticate_liff_user(**kwargs)
+        if error:
+            return error
 
-        if not id_token:
-            return request.redirect('/liff/member?error=no_token')
-
-        line_service = request.env['line.api.service'].sudo()
-        payload = line_service.verify_id_token(id_token)
-        if not payload:
-            return request.redirect('/liff/member?error=invalid_token')
-
-        line_uid = payload.get('sub')
-        if not line_uid:
-            return request.redirect('/liff/member?error=no_uid')
-
-        LineUser = request.env['line.user'].sudo()
-        line_user = LineUser.create_or_update_from_liff(payload)
-        if not line_user:
-            return request.redirect('/liff/member?error=user_creation_failed')
-
-        partner, user = self._ensure_portal_user(line_user, payload)
-        if not user:
-            return request.redirect('/liff/member?error=login_failed')
-
-        db = request.env.cr.dbname
-        temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
-        try:
-            user.sudo().write({'password': temp_password})
-            request.env.cr.flush()
-            request.env.cr.commit()
-            request.session.authenticate(db, {
-                'login': user.login,
-                'password': temp_password,
-                'type': 'password',
-            })
-        except Exception:
-            _logger.exception('liff_redirect_booking: session.authenticate 失敗')
-            return request.redirect('/liff/member?error=login_failed')
-
-        # 跳轉到預約詳情
-        redirect_url = f'/my/ext-bookings/{booking_id}'
+        redirect_url = f'/my/ext-bookings/{booking_id}?liff=1'
         return request.redirect(redirect_url)
 
     # ------------------------------------------------------------------
@@ -190,7 +169,7 @@ class LiffRedirectController(http.Controller):
         使用 auth='none' 所以不能用 request.render()，直接回 HTML。
         """
         ICP = request.env['ir.config_parameter'].sudo()
-        liff_id = ICP.get_param('woow_line_liff.liff_id_member', '')
+        liff_id = ICP.get_param('woow_line_bridge.liff_id_member', '')
 
         # 直接跳轉對照表（fallback）
         direct_urls = {
@@ -202,11 +181,11 @@ class LiffRedirectController(http.Controller):
         html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Loading...</title>
-<style>body{{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#FAF6F2;margin:0;}}
-.s{{width:40px;height:40px;border:4px solid #E0D5C8;border-top-color:#B8956A;border-radius:50%;animation:r .8s linear infinite;margin:0 auto 16px;}}
+<style>body{{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#F5F5F5;margin:0;}}
+.s{{width:40px;height:40px;border:4px solid #E5E5E5;border-top-color:#333333;border-radius:50%;animation:r .8s linear infinite;margin:0 auto 16px;}}
 @keyframes r{{to{{transform:rotate(360deg)}}}}</style></head>
 <body><div style="text-align:center"><div class="s"></div>
-<p id="st" style="color:#6B5B4E;font-family:sans-serif;font-size:14px;">正在登入中...</p></div>
+<p id="st" style="color:#666666;font-family:sans-serif;font-size:14px;">正在登入中...</p></div>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
 (function(){{
@@ -332,6 +311,6 @@ liff.init({{liffId:liffId}}).then(function(){{
             except (ValueError, IndexError):
                 pass
 
-        # 預設回會員中心
-        _logger.warning('liff_redirect: 未知的 target=%s，導回會員中心', target)
-        return '/liff/member'
+        # 預設回登入頁
+        _logger.warning('liff_redirect: 未知的 target=%s，導回登入頁', target)
+        return '/web/login'

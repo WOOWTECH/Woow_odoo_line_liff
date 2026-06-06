@@ -45,18 +45,21 @@ class AppointmentBooking(models.Model):
 
     def action_confirm(self):
         """覆寫預約確認，加入 LINE 推播 hook"""
-        result = super().action_confirm()
+        result = super(AppointmentBooking, self.with_context(
+            skip_line_notification=True
+        )).action_confirm()
 
-        for booking in self:
-            if booking.state == 'confirmed' and not booking.line_notification_sent:
-                try:
-                    self.env['line.bridge'].on_booking_confirmed(booking)
-                    booking.sudo().write({'line_notification_sent': True})
-                except Exception:
-                    _logger.exception(
-                        'LINE 通知發送失敗（不影響預約確認）: booking %s',
-                        booking.name,
-                    )
+        if not self.env.context.get('skip_line_notification'):
+            for booking in self:
+                if booking.state == 'confirmed' and not booking.line_notification_sent:
+                    try:
+                        self.env['line.bridge'].on_booking_confirmed(booking)
+                        booking.sudo().write({'line_notification_sent': True})
+                    except Exception:
+                        _logger.exception(
+                            'LINE 通知發送失敗（不影響預約確認）: booking %s',
+                            booking.name,
+                        )
 
         return result
 
@@ -66,17 +69,20 @@ class AppointmentBooking(models.Model):
 
     def action_cancel(self):
         """覆寫預約取消，加入 LINE 推播 hook"""
-        result = super().action_cancel()
+        result = super(AppointmentBooking, self.with_context(
+            skip_line_notification=True
+        )).action_cancel()
 
-        for booking in self:
-            if booking.state == 'cancelled':
-                try:
-                    self.env['line.bridge'].on_booking_cancelled(booking)
-                except Exception:
-                    _logger.exception(
-                        'LINE 取消通知發送失敗: booking %s',
-                        booking.name,
-                    )
+        if not self.env.context.get('skip_line_notification'):
+            for booking in self:
+                if booking.state == 'cancelled':
+                    try:
+                        self.env['line.bridge'].on_booking_cancelled(booking)
+                    except Exception:
+                        _logger.exception(
+                            'LINE 取消通知發送失敗: booking %s',
+                            booking.name,
+                        )
 
         return result
 
