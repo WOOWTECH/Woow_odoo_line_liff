@@ -1,18 +1,71 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- woow_line_bridge/views/res_config_settings_views.xml -->
-<!-- 設定頁加 LIFF 設定 + 店家資訊區塊 -->
-<!-- LINE Login / Messaging API 金鑰區塊已移至 woow_line_base -->
+<!-- 設定頁加 LINE 金鑰 + 店家資訊區塊 -->
 <odoo>
 
     <record id="res_config_settings_view_form_line" model="ir.ui.view">
-        <field name="name">res.config.settings.form.liff</field>
+        <field name="name">res.config.settings.form.line</field>
         <field name="model">res.config.settings</field>
         <field name="inherit_id" ref="base.res_config_settings_view_form"/>
         <field name="arch" type="xml">
             <xpath expr="//form" position="inside">
-                <app data-string="LINE LIFF" string="LINE LIFF"
-                     name="woow_line_bridge" data-key="woow_line_bridge"
-                     groups="woow_line_base.group_line_manager">
+                <app data-string="LINE Bridge" string="LINE Bridge"
+                     data-key="woow_line_bridge"
+                     groups="woow_line_bridge.group_line_manager">
+
+                    <block title="LINE Login Channel" name="line_login_settings">
+                        <setting string="LINE Login Channel ID" help="LINE Login 的 Channel ID">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="line_login_channel_id" class="col-lg-3 o_light_label"/>
+                                    <field name="line_login_channel_id" class="col-lg-6"/>
+                                </div>
+                            </div>
+                        </setting>
+                        <setting string="LINE Login Channel Secret" help="LINE Login 的 Channel Secret">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="line_login_channel_secret" class="col-lg-3 o_light_label"/>
+                                    <field name="line_login_channel_secret" class="col-lg-6" password="True"/>
+                                </div>
+                            </div>
+                        </setting>
+                    </block>
+
+                    <block title="LINE Messaging API" name="line_messaging_settings">
+                        <setting string="Messaging Channel ID" help="Messaging API 的 Channel ID">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="line_messaging_channel_id" class="col-lg-3 o_light_label"/>
+                                    <field name="line_messaging_channel_id" class="col-lg-6"/>
+                                </div>
+                            </div>
+                        </setting>
+                        <setting string="Messaging Channel Secret" help="Messaging API 的 Channel Secret">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="line_messaging_channel_secret" class="col-lg-3 o_light_label"/>
+                                    <field name="line_messaging_channel_secret" class="col-lg-6" password="True"/>
+                                </div>
+                            </div>
+                        </setting>
+                        <setting string="Messaging Access Token" help="Long-lived Channel Access Token">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="line_messaging_access_token" class="col-lg-3 o_light_label"/>
+                                    <field name="line_messaging_access_token" class="col-lg-6" password="True"/>
+                                </div>
+                            </div>
+                        </setting>
+                        <setting string="Webhook URL" help="將此 URL 貼到 LINE Developer Console → Messaging API → Webhook settings → Webhook URL">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="line_webhook_url" class="col-lg-3 o_light_label"/>
+                                    <field name="line_webhook_url" class="col-lg-6" widget="CopyClipboardChar" readonly="1"/>
+                                </div>
+                            </div>
+                        </setting>
+                    </block>
 
                     <block title="LIFF 設定" name="line_liff_settings">
                         <setting string="LIFF ID - 會員中心" help="會員中心主入口的 LIFF ID">
@@ -36,6 +89,18 @@
                                 <div class="row mt16">
                                     <label for="line_liff_id_locations" class="col-lg-3 o_light_label"/>
                                     <field name="line_liff_id_locations" class="col-lg-6"/>
+                                </div>
+                            </div>
+                        </setting>
+                        <setting string="LIFF Endpoint URLs" help="在 LINE Developer Console → LIFF → 各 LIFF app 的 Endpoint URL 填入對應網址">
+                            <div class="content-group">
+                                <div class="row mt16">
+                                    <label for="line_liff_endpoint_news" class="col-lg-3 o_light_label"/>
+                                    <field name="line_liff_endpoint_news" class="col-lg-6" widget="CopyClipboardChar" readonly="1"/>
+                                </div>
+                                <div class="row mt16">
+                                    <label for="line_liff_endpoint_locations" class="col-lg-3 o_light_label"/>
+                                    <field name="line_liff_endpoint_locations" class="col-lg-6" widget="CopyClipboardChar" readonly="1"/>
                                 </div>
                             </div>
                         </setting>
