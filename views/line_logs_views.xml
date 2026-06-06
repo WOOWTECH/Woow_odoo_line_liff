@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- woow_line_bridge/views/line_logs_views.xml -->
+<!-- LINE 事件記錄與推播記錄後台視圖 -->
+<odoo>
+
+    <!-- ============================================================ -->
+    <!-- LINE Event Log Views -->
+    <!-- ============================================================ -->
+
+    <record id="line_event_log_view_tree" model="ir.ui.view">
+        <field name="name">line.event.log.tree</field>
+        <field name="model">line.event.log</field>
+        <field name="arch" type="xml">
+            <list string="LINE 事件記錄" create="0" edit="0">
+                <field name="create_date"/>
+                <field name="line_user_id"/>
+                <field name="event_type"/>
+                <field name="message_type" optional="show"/>
+                <field name="text_content" optional="show"/>
+                <field name="processed"/>
+                <field name="error_msg" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="line_event_log_view_form" model="ir.ui.view">
+        <field name="name">line.event.log.form</field>
+        <field name="model">line.event.log</field>
+        <field name="arch" type="xml">
+            <form string="LINE 事件記錄" create="0" edit="0">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="create_date"/>
+                            <field name="line_user_id"/>
+                            <field name="event_type"/>
+                            <field name="message_type"/>
+                        </group>
+                        <group>
+                            <field name="text_content"/>
+                            <field name="processed"/>
+                            <field name="error_msg"/>
+                        </group>
+                    </group>
+                    <group string="原始 Payload">
+                        <field name="raw_payload" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="line_event_log_view_search" model="ir.ui.view">
+        <field name="name">line.event.log.search</field>
+        <field name="model">line.event.log</field>
+        <field name="arch" type="xml">
+            <search string="搜尋事件記錄">
+                <field name="line_user_id"/>
+                <field name="event_type"/>
+                <field name="text_content"/>
+                <filter name="follow" string="追蹤" domain="[('event_type', '=', 'follow')]"/>
+                <filter name="unfollow" string="取消追蹤" domain="[('event_type', '=', 'unfollow')]"/>
+                <filter name="message" string="訊息" domain="[('event_type', '=', 'message')]"/>
+                <filter name="errors" string="有錯誤" domain="[('error_msg', '!=', False)]"/>
+                <group expand="0" string="分組">
+                    <filter name="group_type" string="事件類型" context="{'group_by': 'event_type'}"/>
+                    <filter name="group_date" string="日期" context="{'group_by': 'create_date:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_line_event_log" model="ir.actions.act_window">
+        <field name="name">LINE 事件記錄</field>
+        <field name="res_model">line.event.log</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="line_event_log_view_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                尚無事件記錄
+            </p>
+            <p>LINE Webhook 事件會自動記錄在這裡。</p>
+        </field>
+    </record>
+
+    <!-- ============================================================ -->
+    <!-- LINE Push Log Views -->
+    <!-- ============================================================ -->
+
+    <record id="line_push_log_view_tree" model="ir.ui.view">
+        <field name="name">line.push.log.tree</field>
+        <field name="model">line.push.log</field>
+        <field name="arch" type="xml">
+            <list string="LINE 推播記錄" create="0" edit="0"
+                  decoration-success="success == True"
+                  decoration-danger="success == False">
+                <field name="create_date"/>
+                <field name="line_user_id"/>
+                <field name="status_code"/>
+                <field name="success"/>
+                <field name="messages" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="line_push_log_view_form" model="ir.ui.view">
+        <field name="name">line.push.log.form</field>
+        <field name="model">line.push.log</field>
+        <field name="arch" type="xml">
+            <form string="LINE 推播記錄" create="0" edit="0">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="create_date"/>
+                            <field name="line_user_id"/>
+                            <field name="status_code"/>
+                            <field name="success"/>
+                        </group>
+                    </group>
+                    <group string="訊息內容">
+                        <field name="messages" nolabel="1"/>
+                    </group>
+                    <group string="回應內容">
+                        <field name="response_body" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="line_push_log_view_search" model="ir.ui.view">
+        <field name="name">line.push.log.search</field>
+        <field name="model">line.push.log</field>
+        <field name="arch" type="xml">
+            <search string="搜尋推播記錄">
+                <field name="line_user_id"/>
+                <filter name="success" string="成功" domain="[('success', '=', True)]"/>
+                <filter name="failed" string="失敗" domain="[('success', '=', False)]"/>
+                <group expand="0" string="分組">
+                    <filter name="group_success" string="狀態" context="{'group_by': 'success'}"/>
+                    <filter name="group_date" string="日期" context="{'group_by': 'create_date:day'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_line_push_log" model="ir.actions.act_window">
+        <field name="name">LINE 推播記錄</field>
+        <field name="res_model">line.push.log</field>
+        <field name="view_mode">list,form</field>
+        <field name="search_view_id" ref="line_push_log_view_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                尚無推播記錄
+            </p>
+            <p>每次推播都會自動記錄在這裡。</p>
+        </field>
+    </record>
+
+</odoo>

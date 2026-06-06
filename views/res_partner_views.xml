@@ -1,20 +1,43 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- woow_line_bridge/views/res_partner_views.xml -->
-<!-- res.partner form 加身體狀況欄位 (Mark Studio 專用) -->
-<!-- LINE 分頁（line_user_ids, has_line_bound）已移至 woow_line_base -->
+<!-- res.partner form 加 LINE 分頁 + 身體狀況欄位 -->
 <odoo>
 
-    <!-- 擴充 Partner Form：加入身體狀況分頁 -->
+    <!-- 擴充 Partner Form：加入 LINE 分頁 -->
     <record id="res_partner_view_form_line" model="ir.ui.view">
-        <field name="name">res.partner.form.markstudio</field>
+        <field name="name">res.partner.form.line</field>
         <field name="model">res.partner</field>
         <field name="inherit_id" ref="base.view_partner_form"/>
         <field name="arch" type="xml">
 
-            <!-- 在 internal_notes 頁籤後加入身體狀況分頁 -->
+            <!-- 在按鈕區域加入 LINE 狀態按鈕 -->
+            <xpath expr="//div[@name='button_box']" position="inside">
+                <button class="oe_stat_button" type="action" icon="fa-commenting"
+                        name="%(woow_line_bridge.action_line_user)d"
+                        context="{'search_default_partner_id': id}">
+                    <field name="has_line_bound" widget="boolean" string="LINE"/>
+                </button>
+            </xpath>
+
+            <!-- 在 internal_notes 頁籤後加入 LINE 與身體狀況分頁 -->
             <xpath expr="//page[@name='internal_notes']" position="after">
+                <page string="LINE 整合" name="line_integration"
+                      groups="woow_line_bridge.group_line_user">
+                    <group string="LINE 帳號">
+                        <field name="line_user_ids" nolabel="1">
+                            <list create="0" edit="0">
+                                <field name="display_name"/>
+                                <field name="line_user_id"/>
+                                <field name="is_follower"/>
+                                <field name="notification_enabled" widget="boolean_toggle"/>
+                                <field name="last_login"/>
+                                <field name="push_count"/>
+                            </list>
+                        </field>
+                    </group>
+                </page>
                 <page string="身體狀況" name="body_condition"
-                      groups="woow_line_base.group_line_user">
+                      groups="woow_line_bridge.group_line_user">
                     <group>
                         <group string="偏好設定">
                             <field name="preferred_time_slot"/>
@@ -31,6 +54,34 @@
                 </page>
             </xpath>
 
+        </field>
+    </record>
+
+    <!-- 擴充 Partner List：加入 LINE 綁定欄位 -->
+    <record id="res_partner_view_tree_line" model="ir.ui.view">
+        <field name="name">res.partner.tree.line</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_partner_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='email']" position="after">
+                <field name="has_line_bound" string="LINE" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- 擴充 Partner Search：加入 LINE 篩選 -->
+    <record id="res_partner_view_search_line" model="ir.ui.view">
+        <field name="name">res.partner.search.line</field>
+        <field name="model">res.partner</field>
+        <field name="inherit_id" ref="base.view_res_partner_filter"/>
+        <field name="arch" type="xml">
+            <xpath expr="//filter[@name='inactive']" position="after">
+                <separator/>
+                <filter name="line_bound" string="已綁定 LINE"
+                        domain="[('has_line_bound', '=', True)]"/>
+                <filter name="line_not_bound" string="未綁定 LINE"
+                        domain="[('has_line_bound', '=', False)]"/>
+            </xpath>
         </field>
     </record>
 

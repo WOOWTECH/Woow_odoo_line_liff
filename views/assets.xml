@@ -1,13 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- woow_line_bridge/views/assets.xml -->
-<!-- LIFF 資源注入（已停用 liff-mode UI 修改） -->
+<!-- ★ 偵測 ?liff=1 後注入 LIFF SDK 初始化腳本到 website layout -->
+<!-- 讓既有 portal 頁面在 LINE 內看起來像 App -->
 <odoo>
 
-    <!-- 保留空 template 避免 upgrade 時 XML ID 遺失錯誤 -->
+    <!-- 注入 LIFF 偵測腳本到 website layout -->
+    <!-- 只在 ?liff=1 時啟用，由 liff_inject.js 偵測 -->
     <template id="liff_sdk_inject" name="LIFF SDK Inject"
               inherit_id="website.layout" priority="99">
         <xpath expr="//head" position="inside">
-            <!-- liff-mode 偵測已停用 — portal 頁面保留原始網站完整樣式 -->
+            <script>
+                // 偵測 ?liff=1 query string，標記 html class
+                (function() {
+                    var params = new URLSearchParams(window.location.search);
+                    if (params.get('liff') === '1') {
+                        document.documentElement.classList.add('liff-mode');
+                    }
+                })();
+            </script>
         </xpath>
     </template>
 

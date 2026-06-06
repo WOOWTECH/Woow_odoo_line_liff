@@ -1,11 +1,53 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- woow_line_bridge/views/menus.xml -->
-<!-- LINE LIFF 後台選單 -->
-<!-- LINE 用戶、事件記錄、推播記錄選單已移至 woow_line_base -->
+<!-- LINE Bridge 後台選單 -->
 <odoo>
 
-    <!-- 設定（連結到 Settings → LINE LIFF 區塊） -->
-    <!-- 頂層選單和用戶/記錄選單由 woow_line_base 提供 -->
-    <!-- 此處僅保留 LIFF 設定的捷徑選單 -->
+    <!-- 頂層選單 -->
+    <menuitem id="menu_line_bridge_root"
+              name="LINE Bridge"
+              sequence="90"
+              web_icon="woow_line_bridge,static/description/icon.png"
+              groups="woow_line_bridge.group_line_user"/>
+
+    <!-- LINE 用戶管理 -->
+    <menuitem id="menu_line_users"
+              name="LINE 用戶"
+              parent="menu_line_bridge_root"
+              action="action_line_user"
+              sequence="10"/>
+
+    <!-- 最新消息 -->
+    <menuitem id="menu_line_news"
+              name="最新消息"
+              parent="menu_line_bridge_root"
+              action="action_line_news"
+              sequence="15"/>
+
+    <!-- 記錄 -->
+    <menuitem id="menu_line_logs"
+              name="記錄"
+              parent="menu_line_bridge_root"
+              sequence="20"/>
+
+    <menuitem id="menu_line_event_log"
+              name="事件記錄"
+              parent="menu_line_logs"
+              action="action_line_event_log"
+              sequence="10"/>
+
+    <menuitem id="menu_line_push_log"
+              name="推播記錄"
+              parent="menu_line_logs"
+              action="action_line_push_log"
+              sequence="20"/>
+
+    <!-- 設定（連結到 Settings → LINE Bridge 區塊） -->
+    <menuitem id="menu_line_config"
+              name="設定"
+              parent="menu_line_bridge_root"
+              action="base.res_config_setting_act_window"
+              sequence="99"
+              groups="woow_line_bridge.group_line_manager"/>
 
 </odoo>

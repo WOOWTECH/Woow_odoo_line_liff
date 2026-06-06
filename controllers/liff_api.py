@@ -48,7 +48,7 @@ class LiffApiController(http.Controller):
             )
 
         # 驗證 ID Token
-        line_service = request.env['line.api.service'].sudo()
+        line_service = request.env['line.service'].sudo()
         payload = line_service.verify_id_token(id_token)
         if not payload:
             return None, Response(
