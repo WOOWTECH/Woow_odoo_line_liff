@@ -36,6 +36,7 @@ class LiffRedirectController(http.Controller):
         'book': '/appointment/1/schedule',
         'my-bookings': '/my/ext-bookings',
         'profile': '/my/account',
+        'home': '/my/home',
     }
 
     # ------------------------------------------------------------------
