@@ -210,8 +210,8 @@ class LineFlexTemplate(models.AbstractModel):
                                 'type': 'button',
                                 'action': {
                                     'type': 'uri',
-                                    'label': '會員中心',
-                                    'uri': book_url,
+                                    'label': '我的帳戶',
+                                    'uri': f'{self._get_base_url()}/liff/redirect/home',
                                 },
                                 'style': 'secondary',
                                 'height': 'md',
@@ -262,8 +262,8 @@ class LineFlexTemplate(models.AbstractModel):
                 'type': 'button',
                 'action': {
                     'type': 'uri',
-                    'label': '查看預約詳情',
-                    'uri': f'{base_url}/liff/redirect/booking/{booking.id}',
+                    'label': '查看詳情',
+                    'uri': f'{base_url}/liff/redirect/home',
                 },
                 'style': 'primary',
                 'color': CLR_DARK,
