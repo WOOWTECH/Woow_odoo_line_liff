@@ -41,7 +41,9 @@ class MailNotificationLine(models.Model):
 
         for notif in notifications:
             try:
-                if notif.notification_type != 'inbox':
+                # Process both inbox and email notifications
+                # Portal users use 'email' type (Odoo 18 constraint)
+                if notif.notification_type not in ('inbox', 'email'):
                     continue
 
                 msg = notif.mail_message_id
