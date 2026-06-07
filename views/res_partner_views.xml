@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- woow_line_bridge/views/res_partner_views.xml -->
-<!-- res.partner form 加 LINE 分頁 + 身體狀況欄位 -->
+<!-- 擴充 res.partner：LINE 整合分頁 -->
 <odoo>
 
     <!-- 擴充 Partner Form：加入 LINE 分頁 -->
@@ -13,16 +13,16 @@
             <!-- 在按鈕區域加入 LINE 狀態按鈕 -->
             <xpath expr="//div[@name='button_box']" position="inside">
                 <button class="oe_stat_button" type="action" icon="fa-commenting"
-                        name="%(woow_line_bridge.action_line_user)d"
+                        name="%(woow_line_base.action_line_user)d"
                         context="{'search_default_partner_id': id}">
                     <field name="has_line_bound" widget="boolean" string="LINE"/>
                 </button>
             </xpath>
 
-            <!-- 在 internal_notes 頁籤後加入 LINE 與身體狀況分頁 -->
+            <!-- 在 internal_notes 頁籤後加入 LINE 分頁 -->
             <xpath expr="//page[@name='internal_notes']" position="after">
                 <page string="LINE 整合" name="line_integration"
-                      groups="woow_line_bridge.group_line_user">
+                      groups="woow_line_base.group_line_user">
                     <group string="LINE 帳號">
                         <field name="line_user_ids" nolabel="1">
                             <list create="0" edit="0">
@@ -34,22 +34,6 @@
                                 <field name="push_count"/>
                             </list>
                         </field>
-                    </group>
-                </page>
-                <page string="身體狀況" name="body_condition"
-                      groups="woow_line_bridge.group_line_user">
-                    <group>
-                        <group string="偏好設定">
-                            <field name="preferred_time_slot"/>
-                        </group>
-                        <group string="到店統計">
-                            <field name="last_visit_date"/>
-                            <field name="visit_count"/>
-                        </group>
-                    </group>
-                    <group string="身體狀況備註">
-                        <field name="body_condition_notes" nolabel="1"
-                               placeholder="記錄客戶的身體狀況，例如：肩頸痠痛、腰痛、過敏史等..."/>
                     </group>
                 </page>
             </xpath>

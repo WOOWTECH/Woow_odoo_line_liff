@@ -1,0 +1,144 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Rich Menu 後台管理視圖 -->
+<odoo>
+
+    <!-- Rich Menu List (Kanban-like) -->
+    <record id="line_richmenu_view_tree" model="ir.ui.view">
+        <field name="name">line.richmenu.tree</field>
+        <field name="model">line.richmenu</field>
+        <field name="arch" type="xml">
+            <list string="Rich Menu"
+                  decoration-success="state == 'active'"
+                  decoration-muted="state == 'archived'">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="size"/>
+                <field name="chat_bar_text"/>
+                <field name="is_default"/>
+                <field name="state" widget="badge"
+                       decoration-success="state == 'active'"
+                       decoration-info="state == 'uploaded'"
+                       decoration-warning="state == 'draft'"
+                       decoration-muted="state == 'archived'"/>
+                <field name="linked_user_count"/>
+                <field name="line_richmenu_id" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Rich Menu Form -->
+    <record id="line_richmenu_view_form" model="ir.ui.view">
+        <field name="name">line.richmenu.form</field>
+        <field name="model">line.richmenu</field>
+        <field name="arch" type="xml">
+            <form string="Rich Menu">
+                <header>
+                    <button name="action_create_on_line" type="object"
+                            string="上傳到 LINE" class="btn-primary"
+                            invisible="state != 'draft'"
+                            groups="woow_line_base.group_line_manager"/>
+                    <button name="action_set_as_default" type="object"
+                            string="設為預設" class="btn-primary"
+                            invisible="state not in ('uploaded',) or is_default"
+                            groups="woow_line_base.group_line_manager"/>
+                    <button name="action_clear_default" type="object"
+                            string="取消預設" class="btn-secondary"
+                            invisible="not is_default"
+                            groups="woow_line_base.group_line_manager"/>
+                    <button name="action_preview" type="object"
+                            string="預覽（綁定到管理員）" class="btn-secondary"
+                            invisible="state in ('draft', 'archived')"
+                            groups="woow_line_base.group_line_manager"/>
+                    <button name="action_archive" type="object"
+                            string="封存" class="btn-secondary"
+                            invisible="state == 'archived'"
+                            confirm="確定要從 LINE 刪除並封存嗎？"
+                            groups="woow_line_base.group_line_manager"/>
+                    <field name="state" widget="statusbar"
+                           statusbar_visible="draft,uploaded,active"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button class="oe_stat_button" icon="fa-users" type="object"
+                                name="action_link_to_users">
+                            <field name="linked_user_count" widget="statinfo" string="綁定用戶"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name" placeholder="例如：馬克健身-主選單"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="chat_bar_text"/>
+                            <field name="size"/>
+                            <field name="selected"/>
+                        </group>
+                        <group>
+                            <field name="line_richmenu_id"/>
+                            <field name="is_default"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="選單圖片" name="image">
+                            <field name="image" widget="image" class="oe_avatar"/>
+                            <field name="image_filename" invisible="1"/>
+                        </page>
+                        <page string="觸按區域" name="areas">
+                            <field name="area_ids">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="label"/>
+                                    <field name="x"/>
+                                    <field name="y"/>
+                                    <field name="width"/>
+                                    <field name="height"/>
+                                    <field name="action_type"/>
+                                    <field name="action_uri" invisible="action_type != 'uri'"/>
+                                    <field name="action_text" invisible="action_type != 'message'"/>
+                                    <field name="action_data" invisible="action_type not in ('postback', 'datetimepicker', 'richmenuswitch')"/>
+                                    <field name="action_richmenu_alias" invisible="action_type != 'richmenuswitch'"/>
+                                    <field name="action_clipboard_text" invisible="action_type != 'clipboard'"/>
+                                    <field name="action_mode" invisible="action_type != 'datetimepicker'"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Rich Menu Action -->
+    <record id="action_line_richmenu" model="ir.actions.act_window">
+        <field name="name">Rich Menu</field>
+        <field name="res_model">line.richmenu</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">建立您的第一個 Rich Menu</p>
+            <p>Rich Menu 是 LINE 聊天室底部的自訂選單，可設定按鈕連結到各種功能。</p>
+        </field>
+    </record>
+
+    <!-- Rich Menu Alias List -->
+    <record id="line_richmenu_alias_view_tree" model="ir.ui.view">
+        <field name="name">line.richmenu.alias.tree</field>
+        <field name="model">line.richmenu.alias</field>
+        <field name="arch" type="xml">
+            <list string="Rich Menu 別名" editable="bottom">
+                <field name="alias_id"/>
+                <field name="richmenu_id"/>
+                <field name="line_alias_id"/>
+                <button name="action_create_on_line" type="object" string="同步到 LINE"
+                        icon="fa-cloud-upload"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="action_line_richmenu_alias" model="ir.actions.act_window">
+        <field name="name">Rich Menu 別名</field>
+        <field name="res_model">line.richmenu.alias</field>
+        <field name="view_mode">list</field>
+    </record>
+
+</odoo>

@@ -67,7 +67,7 @@ class LiffRedirectController(http.Controller):
             return None, request.redirect('/web/login?error=no_token')
 
         # 驗證：優先 ID Token，備援 Access Token
-        line_service = request.env['line.service'].sudo()
+        line_service = request.env['line.api.service'].sudo()
         payload = None
 
         if id_token:

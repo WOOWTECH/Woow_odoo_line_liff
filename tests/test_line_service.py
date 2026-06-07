@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 # woow_line_bridge/tests/test_line_service.py
-# LINE Service API 單元測試
+# LINE API Service 單元測試（line.api.service 由 woow_line_base 提供）
 import base64
 import hashlib
 import hmac
@@ -9,17 +9,17 @@ from unittest.mock import patch, MagicMock
 from odoo.tests.common import TransactionCase
 
 
-class TestLineService(TransactionCase):
+class TestLineApiService(TransactionCase):
 
     def setUp(self):
         super().setUp()
-        self.service = self.env['line.service']
+        self.service = self.env['line.api.service']
         ICP = self.env['ir.config_parameter'].sudo()
-        ICP.set_param('woow_line_bridge.login_channel_id', 'test_channel_id')
-        ICP.set_param('woow_line_bridge.messaging_channel_secret', 'test_secret')
-        ICP.set_param('woow_line_bridge.messaging_access_token', 'test_token')
+        ICP.set_param('woow_line_base.login_channel_id', 'test_channel_id')
+        ICP.set_param('woow_line_base.messaging_channel_secret', 'test_secret')
+        ICP.set_param('woow_line_base.messaging_access_token', 'test_token')
 
-    @patch('odoo.addons.woow_line_bridge.models.line_service.requests.post')
+    @patch('odoo.addons.woow_line_base.models.line_api_service.http_requests.post')
     def test_verify_id_token_success(self, mock_post):
         mock_post.return_value = MagicMock(
             status_code=200,
@@ -30,7 +30,7 @@ class TestLineService(TransactionCase):
         self.assertEqual(result['sub'], 'U1234567890')
         self.assertEqual(result['name'], 'Test User')
 
-    @patch('odoo.addons.woow_line_bridge.models.line_service.requests.post')
+    @patch('odoo.addons.woow_line_base.models.line_api_service.http_requests.post')
     def test_verify_id_token_failure(self, mock_post):
         mock_post.return_value = MagicMock(status_code=400, text='Invalid token')
         result = self.service.verify_id_token('bad_token')

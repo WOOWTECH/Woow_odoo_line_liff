@@ -33,7 +33,7 @@
                     <button name="action_push_to_line" string="推播到 LINE" type="object"
                             class="oe_highlight"
                             invisible="not is_published or line_push_sent"
-                            groups="woow_line_bridge.group_line_manager"
+                            groups="woow_line_base.group_line_manager"
                             confirm="確定要推播給所有 LINE 好友嗎？"/>
                 </header>
                 <sheet>

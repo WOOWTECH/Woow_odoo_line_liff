@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # woow_line_bridge/controllers/webhook.py
 # LINE Webhook 接收端點
-# 接收 LINE Platform 的 Webhook 事件，驗簽後非同步處理
+# 接收 LINE Platform 的 Webhook 事件，驗簽後處理
 import json
 import logging
 
@@ -23,17 +23,13 @@ class LineWebhookController(http.Controller):
     @http.route('/line/webhook', type='http', auth='public',
                 methods=['POST'], csrf=False, save_session=False)
     def webhook(self, **kwargs):
-        """LINE Webhook 主端點
-
-        LINE Platform 會將所有事件 POST 到這個 URL。
-        """
-        # 取得原始 body 與簽章
+        """LINE Webhook 主端點"""
         body_bytes = request.httprequest.get_data()
         signature = request.httprequest.headers.get('X-Line-Signature', '')
 
         # 驗證簽章
-        line_service = request.env['line.service'].sudo()
-        if not line_service.verify_webhook_signature(body_bytes, signature):
+        api_service = request.env['line.api.service'].sudo()
+        if not api_service.verify_webhook_signature(body_bytes, signature):
             _logger.warning('Webhook 簽章驗證失敗')
             return Response('Invalid signature', status=403)
 
@@ -44,7 +40,7 @@ class LineWebhookController(http.Controller):
             _logger.warning('Webhook payload 解析失敗')
             return Response('Invalid JSON', status=400)
 
-        # 處理事件（不阻塞回應）
+        # 處理事件
         events = payload.get('events', [])
         for event in events:
             try:
@@ -52,22 +48,16 @@ class LineWebhookController(http.Controller):
             except Exception:
                 _logger.exception('Webhook 事件處理失敗: %s', event.get('type'))
 
-        # 必須快速回 200
         return Response('OK', status=200)
 
     def _process_event(self, event):
-        """分派處理單一 Webhook 事件
-
-        :param event: LINE event dict
-        """
+        """分派處理單一 Webhook 事件"""
         event_type = event.get('type', '')
         source = event.get('source', {})
         line_uid = source.get('userId', '')
 
-        # 記錄事件
         self._log_event(event, event_type, line_uid)
 
-        # 根據事件類型分派
         handler = getattr(self, f'_handle_{event_type}', None)
         if handler:
             handler(event, line_uid)
@@ -79,10 +69,8 @@ class LineWebhookController(http.Controller):
         EventLog = request.env['line.event.log'].sudo()
         LineUser = request.env['line.user'].sudo()
 
-        # 查找或略過 line_user
         line_user = LineUser.find_by_line_uid(line_uid) if line_uid else LineUser
 
-        # 取得訊息類型
         message_type = False
         message = event.get('message', {})
         if message:
@@ -90,10 +78,8 @@ class LineWebhookController(http.Controller):
             valid_types = ['text', 'image', 'video', 'audio', 'location', 'sticker', 'file']
             message_type = msg_type if msg_type in valid_types else 'other'
 
-        # 取得文字內容
         text_content = message.get('text', '') if message.get('type') == 'text' else ''
 
-        # 對應事件類型到 selection
         valid_event_types = [
             'follow', 'unfollow', 'message', 'postback', 'join', 'leave',
             'memberJoined', 'memberLeft', 'beacon', 'accountLink', 'things',
@@ -111,7 +97,6 @@ class LineWebhookController(http.Controller):
                 'processed': True,
             })
 
-            # 更新用戶事件計數
             if line_user:
                 line_user.write({'event_count': line_user.event_count + 1})
         except Exception:
@@ -129,7 +114,6 @@ class LineWebhookController(http.Controller):
         _logger.info('收到 follow 事件: %s', line_uid)
         LineUser = request.env['line.user'].sudo()
 
-        # 建立或更新用戶
         line_user = LineUser.create_or_update_from_webhook(line_uid)
         from odoo import fields as odoo_fields
         line_user.write({
@@ -138,7 +122,6 @@ class LineWebhookController(http.Controller):
             'follow_date': line_user.follow_date or odoo_fields.Datetime.now(),
         })
 
-        # 取得 profile（如果 webhook 沒附帶完整資訊）
         self._fetch_and_update_profile(line_user)
 
         # 推送歡迎訊息
@@ -153,7 +136,7 @@ class LineWebhookController(http.Controller):
                     'altText': f'歡迎來到{request.env["line.flex.template"].sudo()._get_shop_name()}',
                     'contents': flex,
                 }]
-                request.env['line.service'].sudo().reply(reply_token, messages)
+                request.env['line.api.service'].sudo().reply(reply_token, messages)
             _logger.info('已發送歡迎訊息: %s', line_uid)
         except Exception:
             _logger.exception('發送歡迎訊息失敗: %s', line_uid)
@@ -186,24 +169,23 @@ class LineWebhookController(http.Controller):
 
         _logger.debug('收到文字訊息: user=%s, text=%s', line_uid, text[:50])
 
-        # 基本關鍵字回覆
         reply_token = event.get('replyToken')
         if not reply_token:
             return
 
-        line_service = request.env['line.service'].sudo()
+        api_service = request.env['line.api.service'].sudo()
         response_text = self._match_keyword(text.strip())
 
         if response_text:
-            line_service.reply(reply_token, [{'type': 'text', 'text': response_text}])
+            api_service.reply(reply_token, [{'type': 'text', 'text': response_text}])
 
     def _handle_postback(self, event, line_uid):
         """處理 postback 事件（來自 Rich Menu 或 Flex Message 按鈕）
 
         Postback data 格式：action=xxx&key=value&...
         支援的 action：
-        - cancel_booking: 取消預約
-        - view_booking: 查看預約詳情
+        - cancel_booking: 取消預約（需 appointment.booking 模型存在）
+        - view_booking: 查看預約詳情（需 appointment.booking 模型存在）
         - rebook: 重新預約
         - navigate: Google Maps 導航
         - richmenu: Rich Menu 選單項目
@@ -215,7 +197,6 @@ class LineWebhookController(http.Controller):
         if not data_str or not reply_token:
             return
 
-        # 解析 action=xxx&booking_id=yyy 格式
         params = {}
         for item in data_str.split('&'):
             if '=' in item:
@@ -234,7 +215,12 @@ class LineWebhookController(http.Controller):
     # ------------------------------------------------------------------
 
     def _postback_cancel_booking(self, event, line_uid, params, reply_token):
-        """取消預約（postback）"""
+        """取消預約（postback）— 需 appointment.booking 模型"""
+        # 安全檢查：模型是否存在
+        if 'appointment.booking' not in request.env:
+            _logger.debug('appointment.booking 模型不存在，跳過 cancel_booking')
+            return
+
         booking_id = params.get('booking_id')
         if not booking_id:
             return
@@ -246,29 +232,30 @@ class LineWebhookController(http.Controller):
         Booking = request.env['appointment.booking'].sudo()
         booking = Booking.browse(booking_id)
         if not booking.exists() or booking.state != 'confirmed':
-            request.env['line.service'].sudo().reply(reply_token, [{
+            request.env['line.api.service'].sudo().reply(reply_token, [{
                 'type': 'text',
                 'text': '此預約無法取消（可能已取消或不存在）',
             }])
             return
 
-        # 驗證此預約屬於此 LINE 用戶
         if not self._verify_booking_ownership(line_uid, booking):
             return
 
-        # 取消（skip_line_notification 避免重複推播，因為會用 reply 回覆）
         booking.with_context(skip_line_notification=True).action_cancel()
 
-        # 用 reply 回覆取消確認
         flex = request.env['line.flex.template'].sudo().build_booking_cancelled(booking)
-        request.env['line.service'].sudo().reply(reply_token, [{
+        request.env['line.api.service'].sudo().reply(reply_token, [{
             'type': 'flex',
             'altText': f'預約已取消 - {booking.name}',
             'contents': flex,
         }])
 
     def _postback_view_booking(self, event, line_uid, params, reply_token):
-        """查看預約詳情（postback）"""
+        """查看預約詳情（postback）— 需 appointment.booking 模型"""
+        if 'appointment.booking' not in request.env:
+            _logger.debug('appointment.booking 模型不存在，跳過 view_booking')
+            return
+
         booking_id = params.get('booking_id')
         if not booking_id:
             return
@@ -282,9 +269,8 @@ class LineWebhookController(http.Controller):
         if not booking.exists():
             return
 
-        # 回覆預約確認 flex（顯示詳情）
         flex = request.env['line.flex.template'].sudo().build_booking_confirmed(booking)
-        request.env['line.service'].sudo().reply(reply_token, [{
+        request.env['line.api.service'].sudo().reply(reply_token, [{
             'type': 'flex',
             'altText': f'預約詳情 - {booking.name}',
             'contents': flex,
@@ -294,7 +280,7 @@ class LineWebhookController(http.Controller):
         """重新預約（postback）"""
         base_url = request.env['ir.config_parameter'].sudo().get_param('web.base.url', '')
         rebook_url = f'{base_url}/liff/redirect/book'
-        request.env['line.service'].sudo().reply(reply_token, [{
+        request.env['line.api.service'].sudo().reply(reply_token, [{
             'type': 'text',
             'text': f'請點擊連結重新預約：\n{rebook_url}',
         }])
@@ -306,36 +292,23 @@ class LineWebhookController(http.Controller):
         lng = ICP.get_param('woow_line_bridge.shop_longitude', '')
         if lat and lng:
             nav_url = f'https://www.google.com/maps/dir/?api=1&destination={lat},{lng}'
-            request.env['line.service'].sudo().reply(reply_token, [{
+            request.env['line.api.service'].sudo().reply(reply_token, [{
                 'type': 'text',
                 'text': f'Google 地圖導航：\n{nav_url}',
             }])
 
     def _postback_richmenu(self, event, line_uid, params, reply_token):
-        """Rich Menu 選單項目（postback）
-
-        Rich Menu 建議設定方式（在 LINE OA Manager）：
-        - 立即預約: URI action → LIFF member URL
-        - 我的預約: URI action → LIFF member URL
-        - 最新消息: URI action → LIFF news URL
-        - 店家位置: URI action → LIFF locations URL
-        - 會員中心: URI action → LIFF member URL
-        - 聯絡我們: postback action=richmenu&target=contact
-
-        只有聯絡我們需要 postback（回覆文字訊息），
-        其他全部用 URI 直接開 LIFF 頁面最快。
-        """
+        """Rich Menu 選單項目（postback）"""
         target = params.get('target', '')
         flex_tmpl = request.env['line.flex.template'].sudo()
 
         if target == 'contact':
-            request.env['line.service'].sudo().reply(reply_token, [{
+            request.env['line.api.service'].sudo().reply(reply_token, [{
                 'type': 'text',
                 'text': '歡迎直接傳訊息給我們，將由專人為您服務！',
             }])
             return
 
-        # 其他 target 回覆 LIFF 連結
         target_labels = {
             'book': '立即預約',
             'my-bookings': '我的預約',
@@ -346,7 +319,7 @@ class LineWebhookController(http.Controller):
         page = target if target in ('news', 'locations') else 'book'
         url = flex_tmpl._liff_url(page)
 
-        request.env['line.service'].sudo().reply(reply_token, [{
+        request.env['line.api.service'].sudo().reply(reply_token, [{
             'type': 'text',
             'text': f'請點擊連結前往{label}：\n{url}',
         }])
@@ -365,52 +338,32 @@ class LineWebhookController(http.Controller):
         return line_user.partner_id.id == booking.partner_id.id
 
     def _fetch_and_update_profile(self, line_user):
-        """透過 LINE API 取得用戶 profile 並更新
-
-        :param line_user: line.user record
-        """
-        import requests as http_requests
-
-        access_token = request.env['line.service'].sudo()._get_access_token()
-        if not access_token:
-            return
-
-        try:
-            resp = http_requests.get(
-                f'https://api.line.me/v2/bot/profile/{line_user.line_user_id}',
-                headers={'Authorization': f'Bearer {access_token}'},
-                timeout=5,
-            )
-            if resp.status_code == 200:
-                profile = resp.json()
-                line_user.write({
-                    'display_name': profile.get('displayName', line_user.display_name),
-                    'picture_url': profile.get('pictureUrl', line_user.picture_url),
-                    'status_message': profile.get('statusMessage', line_user.status_message),
-                })
-        except Exception:
-            _logger.exception('取得 LINE profile 失敗: %s', line_user.line_user_id)
+        """透過 LINE API 取得用戶 profile 並更新"""
+        api_service = request.env['line.api.service'].sudo()
+        profile = api_service.get_profile(line_user.line_user_id)
+        if profile:
+            line_user.write({
+                'display_name': profile.get('displayName', line_user.display_name),
+                'picture_url': profile.get('pictureUrl', line_user.picture_url),
+                'status_message': profile.get('statusMessage', line_user.status_message),
+            })
 
     def _match_keyword(self, text):
-        """比對關鍵字並回覆
-
-        :param text: 用戶輸入的文字
-        :return: 回覆文字，無比對回 None
-        """
+        """比對關鍵字並回覆"""
         ICP = request.env['ir.config_parameter'].sudo()
-        shop_name = ICP.get_param('woow_line_bridge.shop_name', 'Mark Studio 馬克健身')
+        shop_name = ICP.get_param('woow_line_bridge.shop_name', '')
         shop_phone = ICP.get_param('woow_line_bridge.shop_phone', '')
         shop_address = ICP.get_param('woow_line_bridge.shop_address', '')
 
         keywords = {
-            '預約': f'請點擊下方選單的「立即預約」，或直接前往我們的預約頁面 🙌',
-            '電話': f'{shop_name} 電話：{shop_phone}' if shop_phone else f'請透過 LINE 與我們聯繫',
-            '地址': f'{shop_name} 地址：{shop_address}' if shop_address else f'請透過 LINE 與我們聯繫',
+            '預約': '請點擊下方選單的「立即預約」，或直接前往我們的預約頁面',
+            '電話': f'{shop_name} 電話：{shop_phone}' if shop_phone else '請透過 LINE 與我們聯繫',
+            '地址': f'{shop_name} 地址：{shop_address}' if shop_address else '請透過 LINE 與我們聯繫',
             '營業時間': ICP.get_param('woow_line_bridge.shop_opening_hours', '請透過 LINE 與我們聯繫'),
-            '你好': f'您好！歡迎來到{shop_name} 😊\n有任何問題歡迎隨時詢問！',
-            '哈囉': f'您好！歡迎來到{shop_name} 😊\n有任何問題歡迎隨時詢問！',
-            'hi': f'您好！歡迎來到{shop_name} 😊\n有任何問題歡迎隨時詢問！',
-            'hello': f'您好！歡迎來到{shop_name} 😊\n有任何問題歡迎隨時詢問！',
+            '你好': f'您好！歡迎來到{shop_name}\n有任何問題歡迎隨時詢問！',
+            '哈囉': f'您好！歡迎來到{shop_name}\n有任何問題歡迎隨時詢問！',
+            'hi': f'您好！歡迎來到{shop_name}\n有任何問題歡迎隨時詢問！',
+            'hello': f'您好！歡迎來到{shop_name}\n有任何問題歡迎隨時詢問！',
         }
 
         text_lower = text.lower()

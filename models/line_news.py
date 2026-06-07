@@ -57,7 +57,7 @@ class LineNews(models.Model):
 
         try:
             flex = self.env['line.flex.template'].build_news_card(self)
-            self.env['line.service'].broadcast([{
+            self.env['line.api.service'].broadcast([{
                 'type': 'flex',
                 'altText': f'最新消息 - {self.title}',
                 'contents': flex,

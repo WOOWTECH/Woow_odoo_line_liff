@@ -1,0 +1,186 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    woow_line_bridge/data/automated_action_template.xml
+    LINE 通知 Automated Action 範本
+
+    此檔案提供「預約」模組的 Automated Action 範本作為參考。
+    實際使用時，請在 Odoo 後台 Settings → Technical → Automated Actions 建立。
+    每個 Odoo 實例可依需求自訂不同模組的詳情卡片。
+
+    ★ 此檔案僅供參考，不會被模組自動載入（未列在 __manifest__.py 的 data 中）。
+-->
+<odoo>
+    <data noupdate="1">
+
+        <!--
+        ============================================================
+        使用說明：LINE 通知雙卡片架構
+        ============================================================
+
+        本套件提供兩層 LINE 通知機制：
+
+        【第一層：通用基本通知（自動）】
+        來源：woow_line_bridge 的 line.bridge hook
+        內容：表單名稱、階段變更（舊→新）、通知時間
+        按鈕：查看詳情（→ Portal 總覽頁）
+        觸發：程式碼自動觸發，不需設定
+
+        【第二層：補充詳情卡片（可選、可客製）】
+        來源：Odoo Automated Action（base.automation）
+        內容：該模組專屬的詳細資訊（日期、地點、人員、金額⋯）
+        按鈕：再次預約、取消預約、重新預約⋯等操作按鈕
+        觸發：在 Odoo 後台 GUI 設定，每個實例可自訂
+
+        兩張卡片的資訊完全不重疊：
+        - 第一層告訴你「什麼表單、什麼變化」
+        - 第二層告訴你「具體細節、可以做什麼」
+
+        ============================================================
+        設定步驟
+        ============================================================
+
+        1. 進入 Odoo 後台 → Settings → Technical → Automated Actions
+        2. 點「Create」建立新規則
+        3. 填入以下欄位：
+           - 名稱：自訂（例如「LINE 通知 - 預約確認詳情」）
+           - 模型：選擇目標模型（例如 Appointment Booking）
+           - 觸發條件：When Updated
+           - 觸發欄位：state（或 stage_id）
+           - Before Update Filter：[("state", "!=", "confirmed")]
+           - Apply on：[("state", "=", "confirmed")]
+        4. 在 Actions 區塊新增 Server Action：
+           - Action Type：Execute Python Code
+           - Python Code：貼上下方範本程式碼
+
+        ============================================================
+        重要限制（Odoo Server Action 沙箱）
+        ============================================================
+
+        Server Action 的 Python 程式碼在沙箱中執行，有以下限制：
+        - ❌ 不可使用 import（除了 time, datetime, dateutil）
+        - ❌ 不可使用 hasattr()、open()、exec()
+        - ✅ 可用 env, records, record, time, datetime, dateutil, log
+        - ✅ 時區轉換用 dateutil.tz（不能用 pytz）
+
+        ============================================================
+        Python Code 範本：預約確認詳情
+        ============================================================
+
+        WEEKDAY_ZH = ['一', '二', '三', '四', '五', '六', '日']
+        for rec in records:
+            partner = rec.partner_id
+            if not partner:
+                continue
+            line_users = env['line.user'].sudo().search([
+                ('partner_id', '=', partner.id),
+                ('is_follower', '=', True),
+                ('is_blocked', '=', False),
+            ])
+            if not line_users:
+                continue
+            date_str = '-'
+            time_str = '-'
+            if rec.start_datetime:
+                from_zone = dateutil.tz.UTC
+                to_zone = dateutil.tz.gettz('Asia/Taipei')
+                local_dt = rec.start_datetime.replace(tzinfo=from_zone).astimezone(to_zone)
+                wd = WEEKDAY_ZH[local_dt.weekday()]
+                date_str = local_dt.strftime('%Y/%m/%d') + ' (' + wd + ')'
+                time_str = local_dt.strftime('%H:%M')
+            shop = env['ir.config_parameter'].sudo().get_param('woow_line_bridge.shop_name', '-')
+            staff = rec.staff_user_id.name if rec.staff_user_id else '-'
+            phone = partner.mobile or partner.phone or '-'
+            count = str(rec.guest_count) + ' 人' if rec.guest_count else '1 人'
+            info_rows = [
+                ('預約日期', date_str),
+                ('預約時間', time_str),
+                ('地點', shop or '-'),
+                ('服務人員', staff),
+                ('客戶', partner.name or '-'),
+                ('人數', count),
+                ('電話', phone),
+            ]
+            liff_id = env['ir.config_parameter'].sudo().get_param('woow_line_bridge.liff_id_member', '')
+            book_url = 'https://liff.line.me/' + liff_id + '/book' if liff_id else ''
+            factory = env['line.flex.factory']
+            flex = factory.build_notification(
+                event_type='success',
+                title='預約詳情',
+                subtitle=rec.name or '',
+                info_rows=info_rows,
+                buttons=[
+                    {'label': '再次預約', 'uri': book_url},
+                    {'label': '取消預約', 'postback': 'action=cancel_booking&amp;booking_id=' + str(rec.id)},
+                ],
+            )
+            env['line.api.service'].sudo().push(line_users,
+                [{'type': 'flex', 'altText': '預約詳情 - ' + (rec.name or ''), 'contents': flex}])
+
+        ============================================================
+        Python Code 範本：通用模組（銷售訂單、任務⋯）
+        ============================================================
+
+        適用任何有 partner_id 的 mail.thread 模型：
+
+        for rec in records:
+            partner = rec.partner_id if rec.partner_id else None
+            if not partner:
+                continue
+            line_users = env['line.user'].sudo().search([
+                ('partner_id', '=', partner.id),
+                ('is_follower', '=', True),
+                ('is_blocked', '=', False),
+            ])
+            if not line_users:
+                continue
+            info_rows = []
+            # 依模型自訂欄位 — 以下為範例
+            if rec.name:
+                info_rows.append(('編號', rec.name))
+            # 金額（銷售訂單、發票等）
+            # if rec.amount_total:
+            #     info_rows.append(('金額', 'NT$ {:,.0f}'.format(rec.amount_total)))
+            # 負責人
+            # if rec.user_id:
+            #     info_rows.append(('負責人', rec.user_id.name))
+            # 期限
+            # if rec.date_deadline:
+            #     info_rows.append(('期限', str(rec.date_deadline)))
+            info_rows.append(('客戶', partner.name or '-'))
+            liff_id = env['ir.config_parameter'].sudo().get_param('woow_line_bridge.liff_id_member', '')
+            home_url = 'https://liff.line.me/' + liff_id + '/home' if liff_id else ''
+            factory = env['line.flex.factory']
+            flex = factory.build_notification(
+                event_type='info',
+                title='通知',
+                subtitle=rec.name or '',
+                info_rows=info_rows,
+                buttons=[{'label': '查看詳情', 'uri': home_url}],
+            )
+            env['line.api.service'].sudo().push(line_users,
+                [{'type': 'flex', 'altText': '通知 - ' + (rec.name or ''), 'contents': flex}])
+
+        ============================================================
+        line.flex.factory.build_notification() API 參考
+        ============================================================
+
+        factory = env['line.flex.factory']
+        flex = factory.build_notification(
+            event_type,    # 'success'(綠) | 'error'(紅) | 'warning'(橙) | 'info'(藍)
+            title,         # 卡片標題（例如「預約詳情」）
+            subtitle='',   # 副標題（例如編號「APT00001」）
+            info_rows=[],  # [(label, value), ...] 資訊列表
+            buttons=[],    # [{'label': '...', 'uri': '...'}, {'label': '...', 'postback': '...'}]
+            timestamp='',  # 時間戳文字（可選）
+        )
+
+        event_type 色條對照：
+        - 'success' → #22C55E 綠色（確認、完成、通過）
+        - 'error'   → #EF4444 紅色（取消、失敗、駁回）
+        - 'warning' → #F59E0B 橙色（待處理、待付款、即將到期）
+        - 'info'    → #3B82F6 藍色（通知、更新、指派）
+
+        -->
+
+    </data>
+</odoo>

@@ -1,123 +1,62 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- woow_line_bridge/views/line_user_views.xml -->
-<!-- LINE 用戶後台視圖 -->
+<!-- 繼承 woow_line_base 的 LINE 用戶視圖，加入 bridge 功能 -->
 <odoo>
 
-    <!-- Line User Tree View -->
-    <record id="line_user_view_tree" model="ir.ui.view">
-        <field name="name">line.user.tree</field>
+    <!-- 擴充 Tree View：加入 Rich Menu 欄位 -->
+    <record id="line_user_view_tree_bridge" model="ir.ui.view">
+        <field name="name">line.user.tree.bridge</field>
         <field name="model">line.user</field>
+        <field name="inherit_id" ref="woow_line_base.line_user_view_tree"/>
         <field name="arch" type="xml">
-            <list string="LINE 用戶">
-                <field name="line_user_id"/>
-                <field name="display_name"/>
-                <field name="email"/>
-                <field name="partner_id"/>
-                <field name="is_follower" widget="boolean_toggle"/>
-                <field name="is_blocked"/>
-                <field name="notification_enabled" widget="boolean_toggle"/>
-                <field name="follow_date"/>
-                <field name="last_login"/>
-                <field name="push_count"/>
-                <field name="event_count"/>
-            </list>
+            <xpath expr="//field[@name='event_count']" position="after">
+                <field name="current_richmenu_id" optional="hide"/>
+            </xpath>
         </field>
     </record>
 
-    <!-- Line User Form View -->
-    <record id="line_user_view_form" model="ir.ui.view">
-        <field name="name">line.user.form</field>
+    <!-- 擴充 Form View：加入測試推播按鈕、smart buttons、Rich Menu -->
+    <record id="line_user_view_form_bridge" model="ir.ui.view">
+        <field name="name">line.user.form.bridge</field>
         <field name="model">line.user</field>
+        <field name="inherit_id" ref="woow_line_base.line_user_view_form"/>
         <field name="arch" type="xml">
-            <form string="LINE 用戶">
-                <header>
-                    <button name="push_text" type="object" string="發送測試訊息"
-                            class="btn-primary" groups="woow_line_bridge.group_line_manager"
-                            context="{'default_text': '這是測試訊息'}"/>
-                </header>
-                <sheet>
-                    <div class="oe_button_box" name="button_box">
-                        <button name="%(woow_line_bridge.action_line_event_log)d"
-                                type="action" class="oe_stat_button" icon="fa-list"
-                                context="{'search_default_line_user_id': id}">
-                            <field name="event_count" widget="statinfo" string="事件"/>
-                        </button>
-                        <button name="%(woow_line_bridge.action_line_push_log)d"
-                                type="action" class="oe_stat_button" icon="fa-paper-plane"
-                                context="{'search_default_line_user_id': id}">
-                            <field name="push_count" widget="statinfo" string="推播"/>
-                        </button>
-                    </div>
-                    <div class="oe_title">
-                        <label for="display_name"/>
-                        <h1>
-                            <field name="display_name"/>
-                        </h1>
-                    </div>
-                    <group>
-                        <group string="LINE 資料">
-                            <field name="line_user_id"/>
-                            <field name="picture_url" widget="url"/>
-                            <field name="status_message"/>
-                            <field name="email"/>
-                            <field name="preferred_lang"/>
-                        </group>
-                        <group string="Odoo 關聯">
-                            <field name="partner_id"/>
-                        </group>
-                    </group>
-                    <group>
-                        <group string="狀態">
-                            <field name="is_follower"/>
-                            <field name="is_blocked"/>
-                            <field name="notification_enabled"/>
-                        </group>
-                        <group string="時間">
-                            <field name="follow_date"/>
-                            <field name="unfollow_date"/>
-                            <field name="last_login"/>
-                            <field name="bound_at"/>
-                        </group>
-                    </group>
-                </sheet>
-            </form>
-        </field>
-    </record>
+            <!-- 在 header 增加測試推播按鈕 -->
+            <xpath expr="//header" position="inside">
+                <button name="push_text" type="object" string="發送測試訊息"
+                        class="btn-primary" groups="woow_line_base.group_line_manager"
+                        context="{'default_text': '這是測試訊息'}"/>
+            </xpath>
 
-    <!-- Line User Search View -->
-    <record id="line_user_view_search" model="ir.ui.view">
-        <field name="name">line.user.search</field>
-        <field name="model">line.user</field>
-        <field name="arch" type="xml">
-            <search string="搜尋 LINE 用戶">
-                <field name="display_name"/>
-                <field name="line_user_id"/>
-                <field name="email"/>
-                <field name="partner_id"/>
-                <filter name="followers" string="追蹤中" domain="[('is_follower', '=', True)]"/>
-                <filter name="blocked" string="已封鎖" domain="[('is_blocked', '=', True)]"/>
-                <filter name="bound" string="已綁定" domain="[('partner_id', '!=', False)]"/>
-                <filter name="unbound" string="未綁定" domain="[('partner_id', '=', False)]"/>
-                <group expand="0" string="分組">
-                    <filter name="group_follower" string="追蹤狀態" context="{'group_by': 'is_follower'}"/>
-                    <filter name="group_lang" string="語言" context="{'group_by': 'preferred_lang'}"/>
+            <!-- 在 sheet 開頭加入 button_box（smart buttons） -->
+            <xpath expr="//sheet/div[@class='oe_title']" position="before">
+                <div class="oe_button_box" name="button_box">
+                    <button name="action_open_partner"
+                            type="object" class="oe_stat_button" icon="fa-user"
+                            invisible="not partner_id">
+                        <div class="o_stat_info">
+                            <span class="o_stat_text">聯絡人</span>
+                        </div>
+                    </button>
+                    <button name="%(woow_line_bridge.action_line_event_log)d"
+                            type="action" class="oe_stat_button" icon="fa-list"
+                            context="{'search_default_line_user_id': id}">
+                        <field name="event_count" widget="statinfo" string="事件"/>
+                    </button>
+                    <button name="%(woow_line_bridge.action_line_push_log)d"
+                            type="action" class="oe_stat_button" icon="fa-paper-plane"
+                            context="{'search_default_line_user_id': id}">
+                        <field name="push_count" widget="statinfo" string="推播"/>
+                    </button>
+                </div>
+            </xpath>
+
+            <!-- 在設定 tab 加入 Rich Menu 欄位 -->
+            <xpath expr="//page[@name='settings']/group/group[@string='通知偏好']" position="after">
+                <group string="Rich Menu">
+                    <field name="current_richmenu_id"/>
                 </group>
-            </search>
-        </field>
-    </record>
-
-    <!-- Line User Action -->
-    <record id="action_line_user" model="ir.actions.act_window">
-        <field name="name">LINE 用戶</field>
-        <field name="res_model">line.user</field>
-        <field name="view_mode">list,form</field>
-        <field name="search_view_id" ref="line_user_view_search"/>
-        <field name="context">{'search_default_followers': 1}</field>
-        <field name="help" type="html">
-            <p class="o_view_nocontent_smiling_face">
-                尚無 LINE 用戶
-            </p>
-            <p>LINE 用戶會在加好友或使用 LIFF 時自動建立。</p>
+            </xpath>
         </field>
     </record>
 

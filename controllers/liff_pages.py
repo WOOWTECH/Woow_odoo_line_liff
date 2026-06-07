@@ -33,11 +33,11 @@ class LiffPagesController(http.Controller):
         _logger.info('已清除壞 session，重導到 %s', redirect_to)
         return request.redirect(redirect_to)
 
-    @http.route('/liff/news', type='http', auth='public', website=True)
+    @http.route('/liff/news', type='http', auth='public')
     def liff_news(self, **kwargs):
         """最新消息頁"""
         ICP = request.env['ir.config_parameter'].sudo()
-        shop_name = ICP.get_param('woow_line_bridge.shop_name', 'Mark Studio 馬克健身')
+        shop_name = ICP.get_param('woow_line_bridge.shop_name', '')
 
         article_id = kwargs.get('article_id')
         if article_id:
@@ -61,11 +61,11 @@ class LiffPagesController(http.Controller):
         }
         return request.render('woow_line_bridge.liff_news_page', values)
 
-    @http.route('/liff/locations', type='http', auth='public', website=True)
+    @http.route('/liff/locations', type='http', auth='public')
     def liff_locations(self, **kwargs):
         """店家位置頁（Phase 3 補完地圖）"""
         ICP = request.env['ir.config_parameter'].sudo()
-        shop_name = ICP.get_param('woow_line_bridge.shop_name', 'Mark Studio 馬克健身')
+        shop_name = ICP.get_param('woow_line_bridge.shop_name', '')
         shop_address = ICP.get_param('woow_line_bridge.shop_address', '')
         shop_phone = ICP.get_param('woow_line_bridge.shop_phone', '')
         shop_lat = ICP.get_param('woow_line_bridge.shop_latitude', '')

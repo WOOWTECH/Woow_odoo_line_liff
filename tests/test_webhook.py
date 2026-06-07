@@ -15,8 +15,8 @@ class TestWebhookSignature(HttpCase):
     def setUp(self):
         super().setUp()
         ICP = self.env['ir.config_parameter'].sudo()
-        ICP.set_param('woow_line_bridge.messaging_channel_secret', 'test_webhook_secret')
-        ICP.set_param('woow_line_bridge.messaging_access_token', 'test_access_token')
+        ICP.set_param('woow_line_base.messaging_channel_secret', 'test_webhook_secret')
+        ICP.set_param('woow_line_base.messaging_access_token', 'test_access_token')
 
     def _sign(self, body_bytes, secret='test_webhook_secret'):
         return base64.b64encode(

@@ -8,13 +8,13 @@
               name="LINE Bridge"
               sequence="90"
               web_icon="woow_line_bridge,static/description/icon.png"
-              groups="woow_line_bridge.group_line_user"/>
+              groups="woow_line_base.group_line_user"/>
 
-    <!-- LINE 用戶管理 -->
+    <!-- LINE 用戶管理（action 在 woow_line_base） -->
     <menuitem id="menu_line_users"
               name="LINE 用戶"
               parent="menu_line_bridge_root"
-              action="action_line_user"
+              action="woow_line_base.action_line_user"
               sequence="10"/>
 
     <!-- 最新消息 -->
@@ -23,6 +23,25 @@
               parent="menu_line_bridge_root"
               action="action_line_news"
               sequence="15"/>
+
+    <!-- Rich Menu 管理 -->
+    <menuitem id="menu_line_richmenu_parent"
+              name="Rich Menu"
+              parent="menu_line_bridge_root"
+              sequence="18"
+              groups="woow_line_base.group_line_manager"/>
+
+    <menuitem id="menu_line_richmenu"
+              name="Rich Menu"
+              parent="menu_line_richmenu_parent"
+              action="action_line_richmenu"
+              sequence="10"/>
+
+    <menuitem id="menu_line_richmenu_alias"
+              name="Rich Menu 別名"
+              parent="menu_line_richmenu_parent"
+              action="action_line_richmenu_alias"
+              sequence="20"/>
 
     <!-- 記錄 -->
     <menuitem id="menu_line_logs"
@@ -42,12 +61,12 @@
               action="action_line_push_log"
               sequence="20"/>
 
-    <!-- 設定（連結到 Settings → LINE Bridge 區塊） -->
+    <!-- 設定 -->
     <menuitem id="menu_line_config"
               name="設定"
               parent="menu_line_bridge_root"
               action="base.res_config_setting_act_window"
               sequence="99"
-              groups="woow_line_bridge.group_line_manager"/>
+              groups="woow_line_base.group_line_manager"/>
 
 </odoo>

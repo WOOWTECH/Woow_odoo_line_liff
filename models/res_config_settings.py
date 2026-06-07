@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # woow_line_bridge/models/res_config_settings.py
-# 設定頁擴充：LINE 金鑰 + 店家資訊
+# Bridge 擴充設定：LIFF ID、店家資訊、自動推播開關、管理員 LINE UID
+# API 金鑰（login/messaging）已在 woow_line_base 定義，不重複
 import logging
 
 from odoo import api, fields, models
@@ -9,39 +10,24 @@ _logger = logging.getLogger(__name__)
 
 
 class ResConfigSettings(models.TransientModel):
-    """擴充系統設定頁
-
-    加入 LINE 相關金鑰設定與店家資訊設定，
-    全部存入 ir.config_parameter。
-    """
     _inherit = 'res.config.settings'
 
     # ------------------------------------------------------------------
-    # LINE Login Channel
+    # 自動推播開關（mail.notification hook 用）
     # ------------------------------------------------------------------
-    line_login_channel_id = fields.Char(
-        string='LINE Login Channel ID',
-        config_parameter='woow_line_bridge.login_channel_id',
-    )
-    line_login_channel_secret = fields.Char(
-        string='LINE Login Channel Secret',
-        config_parameter='woow_line_bridge.login_channel_secret',
+    auto_line_notify = fields.Boolean(
+        string='自動推送 LINE 通知',
+        config_parameter='woow_line_base.auto_line_notify',
+        help='啟用後，當任何 mail.thread 模型的追蹤欄位變更時，自動推送 LINE Flex 通知。',
     )
 
     # ------------------------------------------------------------------
-    # LINE Messaging API Channel
+    # 管理員 LINE User ID（Rich Menu 預覽用）
     # ------------------------------------------------------------------
-    line_messaging_channel_id = fields.Char(
-        string='Messaging API Channel ID',
-        config_parameter='woow_line_bridge.messaging_channel_id',
-    )
-    line_messaging_channel_secret = fields.Char(
-        string='Messaging API Channel Secret',
-        config_parameter='woow_line_bridge.messaging_channel_secret',
-    )
-    line_messaging_access_token = fields.Char(
-        string='Messaging API Access Token',
-        config_parameter='woow_line_bridge.messaging_access_token',
+    line_admin_user_id = fields.Char(
+        string='管理員 LINE User ID',
+        config_parameter='woow_line_base.admin_line_user_id',
+        help='用於預覽 Rich Menu',
     )
 
     # ------------------------------------------------------------------
@@ -89,7 +75,7 @@ class ResConfigSettings(models.TransientModel):
     )
 
     # ------------------------------------------------------------------
-    # 輔助資訊（唯讀 computed，方便管理者設定 LINE Console）
+    # 輔助資訊（唯讀 computed）
     # ------------------------------------------------------------------
     line_webhook_url = fields.Char(
         string='Webhook URL',

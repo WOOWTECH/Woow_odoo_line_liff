@@ -13,7 +13,7 @@ class LineBridge(models.AbstractModel):
     """LINE Bridge - 業務事件 hook 中樞
 
     所有業務模組要推 LINE 通知，都透過這裡的語意化方法，
-    不直接呼叫 line.service.push()。
+    不直接呼叫 line.api.service.push()。
     這樣可以集中管理推播邏輯、模板選擇、錯誤處理。
     """
     _name = 'line.bridge'
@@ -70,7 +70,7 @@ class LineBridge(models.AbstractModel):
                 'altText': f'預約確認 - {booking.name}',
                 'contents': flex,
             }]
-            self.env['line.service'].push(line_users, messages)
+            self.env['line.api.service'].push(line_users, messages)
             _logger.info('on_booking_confirmed: 已推播 booking %s', booking.name)
         except Exception:
             _logger.exception('on_booking_confirmed 推播失敗: booking %s', booking.name)
@@ -92,7 +92,7 @@ class LineBridge(models.AbstractModel):
                 'altText': f'預約已取消 - {booking.name}',
                 'contents': flex,
             }]
-            self.env['line.service'].push(line_users, messages)
+            self.env['line.api.service'].push(line_users, messages)
             _logger.info('on_booking_cancelled: 已推播 booking %s', booking.name)
         except Exception:
             _logger.exception('on_booking_cancelled 推播失敗: booking %s', booking.name)
@@ -113,7 +113,7 @@ class LineBridge(models.AbstractModel):
                 'altText': f'預約提醒 - {booking.name}（24小時前）',
                 'contents': flex,
             }]
-            self.env['line.service'].push(line_users, messages)
+            self.env['line.api.service'].push(line_users, messages)
             _logger.info('on_booking_reminded_24h: 已推播 booking %s', booking.name)
         except Exception:
             _logger.exception('on_booking_reminded_24h 推播失敗: booking %s', booking.name)
@@ -134,7 +134,7 @@ class LineBridge(models.AbstractModel):
                 'altText': f'預約提醒 - {booking.name}（2小時前）',
                 'contents': flex,
             }]
-            self.env['line.service'].push(line_users, messages)
+            self.env['line.api.service'].push(line_users, messages)
             _logger.info('on_booking_reminded_2h: 已推播 booking %s', booking.name)
         except Exception:
             _logger.exception('on_booking_reminded_2h 推播失敗: booking %s', booking.name)
@@ -158,7 +158,7 @@ class LineBridge(models.AbstractModel):
                 'altText': f'待付款 - {booking.name}',
                 'contents': flex,
             }]
-            self.env['line.service'].push(line_users, messages)
+            self.env['line.api.service'].push(line_users, messages)
             _logger.info('on_booking_payment_required: 已推播 booking %s', booking.name)
         except Exception:
             _logger.exception('on_booking_payment_required 推播失敗: booking %s', booking.name)
@@ -177,7 +177,7 @@ class LineBridge(models.AbstractModel):
             shop_name = self.env['line.flex.template']._get_shop_name()
             text = f'{shop_name} 會議連結已準備好\n\n預約編號：{booking.name}\n會議連結：{meeting_url}'
             messages = [{'type': 'text', 'text': text}]
-            self.env['line.service'].push(line_users, messages)
+            self.env['line.api.service'].push(line_users, messages)
             _logger.info('on_booking_meeting_link_ready: 已推播 booking %s', booking.name)
         except Exception:
             _logger.exception('on_booking_meeting_link_ready 推播失敗: booking %s', booking.name)
@@ -212,7 +212,7 @@ class LineBridge(models.AbstractModel):
             return False
 
         try:
-            sent = self.env['line.service'].push(line_users, messages)
+            sent = self.env['line.api.service'].push(line_users, messages)
             return bool(sent)
         except Exception:
             _logger.exception('notify_partner 推播失敗: partner %s', partner.id)
