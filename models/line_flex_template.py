@@ -239,25 +239,34 @@ class LineFlexTemplate(models.AbstractModel):
     # ------------------------------------------------------------------
 
     def build_booking_confirmed(self, booking):
-        """建構預約確認 Flex Message（通用基本版）
-
-        只顯示狀態變更 + 查看按鈕，詳細資訊由 Automated Action 補充。
-        :param booking: appointment.booking record
-        :return: Flex Message contents dict
-        """
+        """建構預約確認 Flex Message（通用基本版）"""
         return self._build_generic_booking_card(
             title='預約確認',
             status_color=STATUS_SUCCESS,
             booking=booking,
-            info_rows=[('狀態', '已確認')],
-            buttons=[
-                {'type': 'uri', 'label': '查看詳情', 'uri': self._liff_redirect_url('home')},
-            ],
+            old_state='草稿',
+            new_state='已確認',
         )
 
     def _build_generic_booking_card(self, title, status_color, booking,
-                                     info_rows=None, buttons=None):
-        """通用預約卡片 — bridge 層統一使用此方法"""
+                                     old_state='', new_state='',
+                                     extra_rows=None, buttons=None):
+        """通用預約卡片 — bridge 層統一使用此方法
+
+        顯示：表單類型、編號、階段變更、時間 + 查看按鈕
+        """
+        # 時間戳
+        timestamp = ''
+        if booking.write_date:
+            tz = pytz.timezone('Asia/Taipei')
+            local_dt = pytz.utc.localize(booking.write_date).astimezone(tz)
+            timestamp = local_dt.strftime('%Y/%m/%d %H:%M')
+
+        # 表單類型
+        model_name = '預約'
+        if booking.appointment_type_id:
+            model_name = booking.appointment_type_id.name or '預約'
+
         body_contents = [
             {
                 'type': 'text',
@@ -266,12 +275,25 @@ class LineFlexTemplate(models.AbstractModel):
                 'size': 'sm',
             },
             {'type': 'separator', 'margin': 'md', 'color': CLR_BORDER},
+            self._info_row('表單', model_name),
         ]
-        for label, value in (info_rows or []):
+        if old_state and new_state:
+            body_contents.append(self._info_row('階段', f'{old_state} → {new_state}'))
+        elif new_state:
+            body_contents.append(self._info_row('狀態', new_state))
+        if timestamp:
+            body_contents.append(self._info_row('時間', timestamp))
+        for label, value in (extra_rows or []):
             body_contents.append(self._info_row(label, value))
 
+        # Default button: 查看詳情 → portal home
+        if not buttons:
+            buttons = [
+                {'type': 'uri', 'label': '查看詳情', 'uri': self._liff_redirect_url('home')},
+            ]
+
         footer_buttons = []
-        for btn in (buttons or []):
+        for btn in buttons:
             btn_comp = {
                 'type': 'button',
                 'action': {
@@ -321,17 +343,16 @@ class LineFlexTemplate(models.AbstractModel):
         :param reason: 取消原因（可選）
         :return: Flex Message contents dict
         """
-        info_rows = [('狀態', '已取消')]
+        extra = []
         if reason:
-            info_rows.append(('原因', reason))
+            extra.append(('原因', reason))
         return self._build_generic_booking_card(
             title='預約已取消',
             status_color=STATUS_ERROR,
             booking=booking,
-            info_rows=info_rows,
-            buttons=[
-                {'type': 'uri', 'label': '查看詳情', 'uri': self._liff_redirect_url('home')},
-            ],
+            old_state='已確認',
+            new_state='已取消',
+            extra_rows=extra,
         )
 
     # ------------------------------------------------------------------
