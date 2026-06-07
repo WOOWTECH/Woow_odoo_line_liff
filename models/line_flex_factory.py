@@ -126,9 +126,9 @@ class LineFlexFactory(models.AbstractModel):
 
         tracking_values = message.tracking_value_ids if hasattr(message, 'tracking_value_ids') else []
         for tv in tracking_values:
-            old_val = tv.old_value_char or tv.old_value_text or str(tv.old_value_integer or tv.old_value_float or tv.old_value_monetary or '')
-            new_val = tv.new_value_char or tv.new_value_text or str(tv.new_value_integer or tv.new_value_float or tv.new_value_monetary or '')
-            field_desc = tv.field_desc or tv.field_id.field_description or ''
+            old_val = tv.old_value_char or tv.old_value_text or str(tv.old_value_integer or tv.old_value_float or '')
+            new_val = tv.new_value_char or tv.new_value_text or str(tv.new_value_integer or tv.new_value_float or '')
+            field_desc = getattr(tv, 'field_info', '') or getattr(tv, 'field_desc', '') or tv.field_id.field_description or ''
 
             if old_val or new_val:
                 info_rows.append((field_desc, f'{old_val} → {new_val}'))
