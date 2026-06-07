@@ -144,7 +144,13 @@ class LineFlexFactory(models.AbstractModel):
         if not info_rows:
             body_text = message.body or ''
             if body_text:
-                clean = re.sub(r'<[^>]+>', '', body_text).strip()
+                import html as html_mod
+                # Unescape HTML entities first (&lt;p&gt; → <p>)
+                unescaped = html_mod.unescape(body_text)
+                # Strip all HTML tags
+                clean = re.sub(r'<[^>]+>', '', unescaped).strip()
+                # Collapse whitespace
+                clean = re.sub(r'\s+', ' ', clean).strip()
                 if clean:
                     info_rows.append(('', clean[:100]))
 
