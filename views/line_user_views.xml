@@ -52,8 +52,8 @@
             </xpath>
 
             <!-- 在設定 tab 加入 Rich Menu 欄位 -->
-            <xpath expr="//page[@name='settings']/group/group[@string='通知偏好']" position="after">
-                <group string="Rich Menu">
+            <xpath expr="//page[@name='settings']/group" position="inside">
+                <group>
                     <field name="current_richmenu_id"/>
                 </group>
             </xpath>
