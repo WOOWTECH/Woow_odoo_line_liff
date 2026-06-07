@@ -332,7 +332,7 @@ class LineFlexTemplate(models.AbstractModel):
             buttons=[
                 {'type': 'uri', 'label': '查看詳情', 'uri': self._liff_redirect_url('home')},
             ],
-        }
+        )
 
     # ------------------------------------------------------------------
     # 公開方法：預約提醒
