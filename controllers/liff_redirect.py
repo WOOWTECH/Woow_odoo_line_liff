@@ -120,9 +120,9 @@ class LiffRedirectController(http.Controller):
     # 路由
     # ------------------------------------------------------------------
 
-    @http.route('/liff/redirect/<string:target>', type='http', auth='none',
-                methods=['GET', 'POST'], website=False, csrf=False)
-    def liff_redirect(self, target, **kwargs):
+    @http.route(['/liff/redirect', '/liff/redirect/<string:target>'], type='http',
+                auth='none', methods=['GET', 'POST'], website=False, csrf=False)
+    def liff_redirect(self, target='book', **kwargs):
         """LIFF 自動登入跳轉端點
 
         GET: 返回中間頁，前端 JS 取得 ID Token 後 POST 回來
