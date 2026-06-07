@@ -23,9 +23,9 @@
         <field name="arch" type="xml">
             <!-- 在 header 增加測試推播按鈕 -->
             <xpath expr="//header" position="inside">
-                <button name="push_text" type="object" string="發送測試訊息"
+                <button name="action_push_test" type="object" string="發送測試訊息"
                         class="btn-primary" groups="woow_line_base.group_line_manager"
-                        context="{'default_text': '這是測試訊息'}"/>
+                        />
             </xpath>
 
             <!-- 在 sheet 開頭加入 button_box（smart buttons） -->

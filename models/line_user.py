@@ -18,6 +18,16 @@ class LineUserBridge(models.Model):
     # 推播快捷方法（使用 line.api.service）
     # ------------------------------------------------------------------
 
+    def action_push_test(self):
+        """View 按鈕：發送測試訊息"""
+        self.ensure_one()
+        self.push_text('這是測試訊息')
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {'title': 'LINE', 'message': '已發送測試訊息', 'type': 'success', 'sticky': False},
+        }
+
     def push_text(self, text):
         """推播純文字訊息"""
         self.ensure_one()

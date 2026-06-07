@@ -8,13 +8,13 @@
         <field name="name">line.news.tree</field>
         <field name="model">line.news</field>
         <field name="arch" type="xml">
-            <tree string="最新消息" default_order="published_date desc">
+            <liststring="最新消息" default_order="published_date desc">
                 <field name="title"/>
                 <field name="published_date"/>
                 <field name="is_published" widget="boolean_toggle"/>
                 <field name="line_push_sent"/>
                 <field name="author_id"/>
-            </tree>
+            </list>
         </field>
     </record>
 
