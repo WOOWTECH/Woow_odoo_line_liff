@@ -239,62 +239,60 @@ class LineFlexTemplate(models.AbstractModel):
     # ------------------------------------------------------------------
 
     def build_booking_confirmed(self, booking):
-        """建構預約確認 Flex Message
+        """建構預約確認 Flex Message（通用基本版）
 
+        只顯示狀態變更 + 查看按鈕，詳細資訊由 Automated Action 補充。
         :param booking: appointment.booking record
         :return: Flex Message contents dict
         """
-        shop_name = self._get_shop_name()
-        base_url = self._get_base_url()
-        date_str, time_str = self._format_booking_dt(booking)
-        service_name = booking.appointment_type_id.name or ''
-        staff_name = ''
-        if hasattr(booking, 'staff_user_id') and booking.staff_user_id:
-            staff_name = booking.staff_user_id.name
+        return self._build_generic_booking_card(
+            title='預約確認',
+            status_color=STATUS_SUCCESS,
+            booking=booking,
+            info_rows=[('狀態', '已確認')],
+            buttons=[
+                {'type': 'uri', 'label': '查看詳情', 'uri': self._liff_redirect_url('home')},
+            ],
+        )
 
+    def _build_generic_booking_card(self, title, status_color, booking,
+                                     info_rows=None, buttons=None):
+        """通用預約卡片 — bridge 層統一使用此方法"""
         body_contents = [
             {
                 'type': 'text',
-                'text': f'預約編號：{booking.name or ""}',
-                'color': CLR_DARK,
-                'size': 'md',
-                'weight': 'bold',
+                'text': booking.name or '',
+                'color': CLR_LABEL,
+                'size': 'sm',
             },
-            {'type': 'separator', 'margin': 'md'},
-            self._info_row('服務', service_name),
-            self._info_row('日期', date_str),
-            self._info_row('時間', time_str),
-            self._info_row('地點', shop_name),
+            {'type': 'separator', 'margin': 'md', 'color': CLR_BORDER},
         ]
-        if staff_name:
-            body_contents.insert(5, self._info_row('治療師', staff_name))
+        for label, value in (info_rows or []):
+            body_contents.append(self._info_row(label, value))
 
-        footer_buttons = [
-            {
+        footer_buttons = []
+        for btn in (buttons or []):
+            btn_comp = {
                 'type': 'button',
                 'action': {
-                    'type': 'uri',
-                    'label': '查看詳情',
-                    'uri': self._liff_redirect_url('home'),
+                    'type': btn.get('type', 'uri'),
+                    'label': btn['label'],
                 },
-                'style': 'primary',
-                'color': CLR_DARK,
-            },
-            {
-                'type': 'button',
-                'action': {
-                    'type': 'postback',
-                    'label': '取消預約',
-                    'data': f'action=cancel_booking&booking_id={booking.id}',
-                },
-                'style': 'secondary',
-            },
-        ]
+                'style': 'primary' if not footer_buttons else 'secondary',
+                'height': 'sm',
+            }
+            if btn.get('type', 'uri') == 'uri':
+                btn_comp['action']['uri'] = btn.get('uri', '')
+                if not footer_buttons:
+                    btn_comp['color'] = CLR_DARK
+            elif btn.get('type') == 'postback':
+                btn_comp['action']['data'] = btn.get('data', '')
+            footer_buttons.append(btn_comp)
 
         return {
             'type': 'bubble',
             'size': 'mega',
-            'header': self._booking_header('預約確認', STATUS_SUCCESS),
+            'header': self._booking_header(title, status_color),
             'body': {
                 'type': 'box',
                 'layout': 'vertical',
@@ -317,61 +315,23 @@ class LineFlexTemplate(models.AbstractModel):
     # ------------------------------------------------------------------
 
     def build_booking_cancelled(self, booking, reason=''):
-        """建構預約取消 Flex Message
+        """建構預約取消 Flex Message（通用基本版）
 
         :param booking: appointment.booking record
         :param reason: 取消原因（可選）
         :return: Flex Message contents dict
         """
-        rebook_url = self._liff_redirect_url('book')
-        date_str, time_str = self._format_booking_dt(booking)
-        service_name = booking.appointment_type_id.name or ''
-
-        body_contents = [
-            {
-                'type': 'text',
-                'text': f'預約編號：{booking.name or ""}',
-                'color': CLR_DARK,
-                'size': 'md',
-                'weight': 'bold',
-            },
-            {'type': 'separator', 'margin': 'md'},
-            self._info_row('服務', service_name),
-            self._info_row('原定時間', f'{date_str} {time_str}'),
-        ]
+        info_rows = [('狀態', '已取消')]
         if reason:
-            body_contents.append(self._info_row('取消原因', reason))
-
-        return {
-            'type': 'bubble',
-            'size': 'mega',
-            'header': self._booking_header('預約已取消', STATUS_ERROR),
-            'body': {
-                'type': 'box',
-                'layout': 'vertical',
-                'backgroundColor': CLR_WHITE,
-                'paddingAll': '20px',
-                'spacing': 'md',
-                'contents': body_contents,
-            },
-            'footer': {
-                'type': 'box',
-                'layout': 'vertical',
-                'spacing': 'sm',
-                'paddingAll': '16px',
-                'contents': [
-                    {
-                        'type': 'button',
-                        'action': {
-                            'type': 'uri',
-                            'label': '重新預約',
-                            'uri': rebook_url,
-                        },
-                        'style': 'primary',
-                        'color': CLR_DARK,
-                    },
-                ],
-            },
+            info_rows.append(('原因', reason))
+        return self._build_generic_booking_card(
+            title='預約已取消',
+            status_color=STATUS_ERROR,
+            booking=booking,
+            info_rows=info_rows,
+            buttons=[
+                {'type': 'uri', 'label': '查看詳情', 'uri': self._liff_redirect_url('home')},
+            ],
         }
 
     # ------------------------------------------------------------------
