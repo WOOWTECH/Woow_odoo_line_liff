@@ -60,7 +60,6 @@
     'assets': {
         'web.assets_frontend': [
             'woow_line_bridge/static/src/js/liff_helper.js',
-            'woow_line_bridge/static/src/js/liff_inject.js',
             'woow_line_bridge/static/src/css/liff.css',
         ],
     },

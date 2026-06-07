@@ -5,61 +5,6 @@
  */
 
 /* ============================================================
-   LIFF 模式：隱藏 Odoo header/footer
-   ============================================================ */
-html.liff-mode header,
-html.liff-mode nav.navbar,
-html.liff-mode .o_main_navbar,
-html.liff-mode footer,
-html.liff-mode .o_portal_navbar,
-html.liff-mode #top_menu_container,
-html.liff-mode #oe_main_menu_navbar,
-html.liff-mode .offcanvas,
-html.liff-mode #top_menu_collapse_mobile {
-    display: none !important;
-}
-
-html.liff-mode #wrapwrap {
-    padding-top: 0 !important;
-    margin-top: 0 !important;
-    overflow-x: hidden !important;
-}
-
-html.liff-mode,
-html.liff-mode body {
-    overflow-x: hidden !important;
-}
-
-html.liff-mode .o_portal_wrap {
-    padding-top: 0 !important;
-}
-
-/* 移除 Portal 頁面多餘空間 */
-html.liff-mode .o_portal .mt-5,
-html.liff-mode .o_portal .mt-4 {
-    margin-top: 1rem !important;
-}
-
-html.liff-mode .o_portal .pt-5,
-html.liff-mode .o_portal .pt-4 {
-    padding-top: 1rem !important;
-}
-
-/* 隱藏 admin bar、user switch bar */
-html.liff-mode .o_frontend_to_backend_nav,
-html.liff-mode .o_user_switch,
-html.liff-mode .o_bottom_navbar,
-html.liff-mode owl-component[name="web.user_switch"] {
-    display: none !important;
-}
-
-/* Livechat 隱藏 (LIFF 內不需要) */
-html.liff-mode .o-livechat-root,
-html.liff-mode .o-livechat-LivechatButton {
-    display: none !important;
-}
-
-/* ============================================================
    LIFF Container
    ============================================================ */
 .liff-container {

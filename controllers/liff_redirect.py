@@ -136,8 +136,6 @@ class LiffRedirectController(http.Controller):
             return error
 
         redirect_url = self._get_redirect_url(target, kwargs)
-        separator = '&' if '?' in redirect_url else '?'
-        redirect_url = f'{redirect_url}{separator}liff=1'
 
         _logger.info(
             'liff_redirect: LINE → user %s → %s',
@@ -156,7 +154,7 @@ class LiffRedirectController(http.Controller):
         if error:
             return error
 
-        redirect_url = f'/my/ext-bookings/{booking_id}?liff=1'
+        redirect_url = f'/my/ext-bookings/{booking_id}'
         return request.redirect(redirect_url)
 
     # ------------------------------------------------------------------
