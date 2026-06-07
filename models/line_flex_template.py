@@ -55,6 +55,18 @@ class LineFlexTemplate(models.AbstractModel):
         """取得 ir.config_parameter 值"""
         return self.env['ir.config_parameter'].sudo().get_param(key, default)
 
+    def _liff_redirect_url(self, target):
+        """組合 LIFF redirect URL（在 LINE 內開啟可自動登入）
+
+        優先使用 liff.line.me URL（LIFF 環境），備援直接 URL。
+        :param target: redirect target (book, my-bookings, profile, home)
+        :return: URL string
+        """
+        liff_id = self._get_config('woow_line_bridge.liff_id_member', '')
+        if liff_id:
+            return f'https://liff.line.me/{liff_id}/{target}'
+        return f'{self._get_base_url()}/liff/redirect/{target}'
+
     def _get_liff_id(self, page):
         """取得指定頁面的 LIFF ID
 
@@ -157,7 +169,7 @@ class LineFlexTemplate(models.AbstractModel):
         :return: Flex Message contents dict
         """
         shop_name = self._get_shop_name()
-        book_url = f'{self._get_base_url()}/liff/redirect/book'
+        book_url = self._liff_redirect_url('book')
         greeting = f'{display_name} 您好！' if display_name else '您好！'
 
         return {
@@ -211,7 +223,7 @@ class LineFlexTemplate(models.AbstractModel):
                                 'action': {
                                     'type': 'uri',
                                     'label': '我的帳戶',
-                                    'uri': f'{self._get_base_url()}/liff/redirect/home',
+                                    'uri': self._liff_redirect_url('home'),
                                 },
                                 'style': 'secondary',
                                 'height': 'md',
@@ -263,7 +275,7 @@ class LineFlexTemplate(models.AbstractModel):
                 'action': {
                     'type': 'uri',
                     'label': '查看詳情',
-                    'uri': f'{base_url}/liff/redirect/home',
+                    'uri': self._liff_redirect_url('home'),
                 },
                 'style': 'primary',
                 'color': CLR_DARK,
@@ -311,7 +323,7 @@ class LineFlexTemplate(models.AbstractModel):
         :param reason: 取消原因（可選）
         :return: Flex Message contents dict
         """
-        rebook_url = f'{self._get_base_url()}/liff/redirect/book'
+        rebook_url = self._liff_redirect_url('book')
         date_str, time_str = self._format_booking_dt(booking)
         service_name = booking.appointment_type_id.name or ''
 
