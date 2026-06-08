@@ -11,7 +11,7 @@
         <field name="arch" type="xml">
             <xpath expr="//form" position="inside">
                 <app data-string="LINE Bridge" string="LINE Bridge"
-                     data-key="woow_line_bridge"
+                     name="woow_line_bridge" data-key="woow_line_bridge"
                      groups="woow_line_base.group_line_manager">
 
                     <block title="自動推播" name="line_auto_notify_settings">
