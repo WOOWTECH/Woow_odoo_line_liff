@@ -94,8 +94,8 @@
                                     <field name="width"/>
                                     <field name="height"/>
                                     <field name="action_type"/>
-                                    <field name="liff_page" invisible="action_type != 'uri'"
-                                           optional="show"/>
+                                    <field name="action_portal_path" invisible="action_type != 'liff_portal'"
+                                           placeholder="/home"/>
                                     <field name="action_uri" invisible="action_type != 'uri'"/>
                                     <field name="action_text" invisible="action_type != 'message'"/>
                                     <field name="action_data" invisible="action_type not in ('postback', 'datetimepicker', 'richmenuswitch')"/>
