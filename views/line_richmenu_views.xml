@@ -103,6 +103,17 @@
                                 </list>
                             </field>
                         </page>
+                        <page string="別名（Tab 切換）" name="aliases">
+                            <field name="alias_ids">
+                                <list editable="bottom">
+                                    <field name="alias_id"/>
+                                    <field name="line_alias_id"/>
+                                    <button name="action_create_on_line" type="object"
+                                            string="同步到 LINE" icon="fa-cloud-upload"
+                                            groups="woow_line_base.group_line_manager"/>
+                                </list>
+                            </field>
+                        </page>
                     </notebook>
                 </sheet>
             </form>

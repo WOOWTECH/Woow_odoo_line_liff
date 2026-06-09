@@ -24,24 +24,13 @@
               action="action_line_news"
               sequence="15"/>
 
-    <!-- Rich Menu 管理 -->
-    <menuitem id="menu_line_richmenu_parent"
-              name="Rich Menu"
-              parent="menu_line_bridge_root"
-              sequence="18"
-              groups="woow_line_base.group_line_manager"/>
-
+    <!-- Rich Menu 管理（別名已整合到表單內） -->
     <menuitem id="menu_line_richmenu"
               name="Rich Menu"
-              parent="menu_line_richmenu_parent"
+              parent="menu_line_bridge_root"
               action="action_line_richmenu"
-              sequence="10"/>
-
-    <menuitem id="menu_line_richmenu_alias"
-              name="Rich Menu 別名"
-              parent="menu_line_richmenu_parent"
-              action="action_line_richmenu_alias"
-              sequence="20"/>
+              sequence="18"
+              groups="woow_line_base.group_line_manager"/>
 
     <!-- 記錄 -->
     <menuitem id="menu_line_logs"

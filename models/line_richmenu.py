@@ -41,6 +41,8 @@ class LineRichMenu(models.Model):
 
     # 觸按區域
     area_ids = fields.One2many('line.richmenu.area', 'richmenu_id', string='觸按區域')
+    # 別名（Tab 切換用）
+    alias_ids = fields.One2many('line.richmenu.alias', 'richmenu_id', string='別名')
 
     # 統計
     linked_user_count = fields.Integer('綁定用戶數', compute='_compute_linked_user_count')
