@@ -230,6 +230,14 @@ class LineRichMenuArea(models.Model):
         ('clipboard', '複製文字'),
     ], string='動作類型', required=True, default='uri')
 
+    liff_page = fields.Selection([
+        ('home', '首頁總覽'),
+        ('book', '立即預約'),
+        ('my-bookings', '我的預約'),
+        ('profile', '個人資料'),
+        ('news', '最新消息'),
+    ], string='LIFF 頁面')
+
     action_uri = fields.Char('URL')
     action_text = fields.Char('訊息文字')
     action_data = fields.Char('Postback Data')
@@ -238,6 +246,26 @@ class LineRichMenuArea(models.Model):
     action_mode = fields.Selection([
         ('date', '日期'), ('time', '時間'), ('datetime', '日期時間'),
     ], string='選擇器模式', default='date')
+
+    @api.onchange('liff_page')
+    def _onchange_liff_page(self):
+        if not self.liff_page:
+            return
+        ICP = self.env['ir.config_parameter'].sudo()
+        if self.liff_page == 'news':
+            liff_id = ICP.get_param('woow_line_bridge.liff_id_news', '')
+            if liff_id:
+                self.action_uri = f'https://liff.line.me/{liff_id}'
+            else:
+                self.action_uri = f'{ICP.get_param("web.base.url", "")}/liff/news'
+        else:
+            liff_id = ICP.get_param('woow_line_bridge.liff_id_member', '')
+            if liff_id:
+                self.action_uri = f'https://liff.line.me/{liff_id}/{self.liff_page}'
+            else:
+                self.action_uri = f'{ICP.get_param("web.base.url", "")}/liff/redirect/{self.liff_page}'
+        if self.action_type != 'uri':
+            self.action_type = 'uri'
 
     def _build_action(self):
         """組裝 LINE action object"""
