@@ -578,11 +578,13 @@ class LineFlexTemplate(models.AbstractModel):
             },
         }
 
-        # 如果有圖片 URL，加 hero image
+        # 如果有圖片 URL，加 hero image（LINE 要求 https）
         image_url = getattr(news, 'image_url', '') or ''
         if not image_url and getattr(news, 'image', None):
             image_url = f'{base_url}/web/image/line.news/{news.id}/image'
         if image_url:
+            # LINE Flex Message 圖片 URL 必須是 https
+            image_url = image_url.replace('http://', 'https://', 1)
             result['hero'] = {
                 'type': 'image',
                 'url': image_url,
