@@ -25,8 +25,8 @@ class LineNews(models.Model):
     body = fields.Html(string='內容', sanitize=True)
     image = fields.Binary(string='封面圖片', attachment=True)
     card_url = fields.Char(
-        string='閱讀全文 URL', compute='_compute_card_url',
-        help='LINE Flex 卡片「閱讀全文」按鈕連結',
+        string='閱讀全文 URL',
+        help='LINE Flex 卡片「閱讀全文」按鈕連結（建立時自動填入，可自行修改）',
     )
     published_date = fields.Date(string='發佈日期', default=fields.Date.today)
     author_id = fields.Many2one(
@@ -49,11 +49,15 @@ class LineNews(models.Model):
         for rec in self:
             rec.is_published = rec.state == 'published'
 
-    def _compute_card_url(self):
+    @api.model_create_multi
+    def create(self, vals_list):
+        records = super().create(vals_list)
         base_url = self.env['ir.config_parameter'].sudo().get_param(
             'web.base.url', '')
-        for rec in self:
-            rec.card_url = f'{base_url}/liff/news?article_id={rec.id}' if rec.id else False
+        for rec in records:
+            if not rec.card_url:
+                rec.card_url = f'{base_url}/liff/news?article_id={rec.id}'
+        return records
 
     def action_publish(self):
         """確認發佈文章"""

@@ -568,7 +568,7 @@ class LineFlexTemplate(models.AbstractModel):
                         'action': {
                             'type': 'uri',
                             'label': '閱讀全文',
-                            'uri': f'{base_url}/liff/news?article_id={news.id}',
+                            'uri': news.card_url or f'{base_url}/liff/news?article_id={news.id}',
                         },
                         'style': 'primary',
                         'color': CLR_DARK,
