@@ -12,7 +12,7 @@
             <xpath expr="//form" position="inside">
                 <app data-string="LINE Bridge" string="LINE Bridge"
                      name="woow_line_bridge" data-key="woow_line_bridge"
-                     logo="/woow_line_bridge/static/description/icon.png"
+                     logo="/woow_line_bridge/static/description/line_icon.png"
                      groups="woow_line_base.group_line_manager">
 
                     <block title="自動推播" name="line_auto_notify_settings">
