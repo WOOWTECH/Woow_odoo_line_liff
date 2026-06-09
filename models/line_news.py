@@ -57,11 +57,21 @@ class LineNews(models.Model):
 
         try:
             flex = self.env['line.flex.template'].build_news_card(self)
-            self.env['line.api.service'].broadcast([{
+            success = self.env['line.api.service'].broadcast([{
                 'type': 'flex',
                 'altText': f'最新消息 - {self.title}',
                 'contents': flex,
             }])
+            if not success:
+                return {
+                    'type': 'ir.actions.client',
+                    'tag': 'display_notification',
+                    'params': {
+                        'title': 'LINE 推播',
+                        'message': '推播失敗：LINE API 回傳錯誤，請檢查 Access Token',
+                        'type': 'danger',
+                    },
+                }
             self.write({'line_push_sent': True})
             return {
                 'type': 'ir.actions.client',
