@@ -112,22 +112,8 @@ class LiffApiController(http.Controller):
 
         # 安全性：禁止指定任意 partner_id 綁定（防止帳號劫持）
         # 僅允許自動建立或 email 匹配綁定
-        partner_id = None
-            if success:
-                return Response(
-                    json.dumps({
-                        'status': 'bound',
-                        'partner_id': line_user.partner_id.id,
-                        'partner_name': line_user.partner_id.name,
-                    }, ensure_ascii=False),
-                    content_type='application/json',
-                )
-            return Response(
-                json.dumps({'error': 'bind_failed', 'message': '綁定失敗'}),
-                status=400, content_type='application/json',
-            )
 
-        # 無指定 partner_id，自動建立
+        # 自動建立
         email = line_user.email or ''
         name = line_user.display_name or 'LINE User'
 
