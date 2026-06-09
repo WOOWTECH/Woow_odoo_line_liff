@@ -40,18 +40,18 @@ class LiffPagesController(http.Controller):
         """公開存取新聞封面圖片（LINE Flex Message 規格）
 
         LINE 要求: HTTPS, JPEG/PNG, max 1024×1024 px, max 10 MB
+        Odoo 18 image_process: 輸入/輸出皆為 raw bytes
         """
         from odoo.tools.image import image_process
 
         news = request.env['line.news'].sudo().browse(news_id)
         if not news.exists() or not news.image:
             return request.not_found()
-        # 縮放到 LINE 規格上限 1024×1024，輸出 PNG（保留透明度）
-        processed = image_process(
-            news.image, size=(1024, 1024), output_format='PNG',
-        )
-        image_data = base64.b64decode(processed)
-        # 偵測實際格式：PNG 以 \x89PNG 開頭
+        # Binary field 回傳 base64，先解碼為 raw bytes
+        raw = base64.b64decode(news.image)
+        # 縮放到 LINE 規格上限 1024×1024
+        image_data = image_process(raw, size=(1024, 1024))
+        # 偵測實際格式
         content_type = 'image/png' if image_data[:4] == b'\x89PNG' else 'image/jpeg'
         return request.make_response(image_data, headers=[
             ('Content-Type', content_type),
