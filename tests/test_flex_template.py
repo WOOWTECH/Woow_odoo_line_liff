@@ -113,7 +113,6 @@ class TestFlexTemplate(TransactionCase):
         news.id = 1
         news.title = '測試新聞'
         news.summary = '這是摘要'
-        news.image_url = ''
         news.image = None
         result = self.tmpl.build_news_card(news)
         self._validate_bubble(result)
@@ -121,13 +120,13 @@ class TestFlexTemplate(TransactionCase):
         # 沒有 hero（因為沒圖片）
         self.assertNotIn('hero', result)
 
-    def test_build_news_card_with_image_url(self):
+    def test_build_news_card_with_binary_image(self):
         news = MagicMock()
         news.id = 2
         news.title = '有圖新聞'
         news.summary = ''
-        news.image_url = 'https://example.com/img.jpg'
-        news.image = None
+        news.image = b'\x89PNG'
         result = self.tmpl.build_news_card(news)
         self.assertIn('hero', result)
-        self.assertEqual(result['hero']['url'], 'https://example.com/img.jpg')
+        self.assertIn('/liff/news/image/2', result['hero']['url'])
+        self.assertTrue(result['hero']['url'].startswith('https://'))

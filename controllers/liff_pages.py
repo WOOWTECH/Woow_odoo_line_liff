@@ -2,6 +2,7 @@
 # woow_line_bridge/controllers/liff_pages.py
 # 自建 LIFF 頁面 Controller
 # 渲染：最新消息 /liff/news、店家位置 /liff/locations
+import base64
 import logging
 
 from odoo import http
@@ -33,6 +34,19 @@ class LiffPagesController(http.Controller):
         _logger.info('已清除壞 session，重導到 %s', redirect_to)
         return request.redirect(redirect_to)
 
+    @http.route('/liff/news/image/<int:news_id>', type='http', auth='none',
+                csrf=False)
+    def liff_news_image(self, news_id, **kwargs):
+        """公開存取新聞封面圖片（LINE 伺服器需直接取得）"""
+        news = request.env['line.news'].sudo().browse(news_id)
+        if not news.exists() or not news.image:
+            return request.not_found()
+        image_data = base64.b64decode(news.image)
+        return request.make_response(image_data, headers=[
+            ('Content-Type', 'image/jpeg'),
+            ('Cache-Control', 'public, max-age=86400'),
+        ])
+
     @http.route('/liff/news', type='http', auth='none', csrf=False)
     def liff_news(self, **kwargs):
         """最新消息頁（inline HTML，不依賴 website 模板）"""
@@ -55,7 +69,7 @@ class LiffPagesController(http.Controller):
 
         cards_html = ''
         if article:
-            body = article.content or article.summary or ''
+            body = article.body or article.summary or ''
             cards_html = f'''
             <div style="padding:16px;">
                 <a href="/liff/news" style="color:#666;text-decoration:none;">&larr; 返回列表</a>

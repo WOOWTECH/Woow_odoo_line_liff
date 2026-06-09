@@ -516,7 +516,6 @@ class LineFlexTemplate(models.AbstractModel):
         :return: Flex Message contents dict
         """
         base_url = self._get_base_url()
-        news_url = self._liff_url('news')
         shop_name = self._get_shop_name()
 
         body_contents = [
@@ -569,7 +568,7 @@ class LineFlexTemplate(models.AbstractModel):
                         'action': {
                             'type': 'uri',
                             'label': '閱讀全文',
-                            'uri': f'{news_url}?article_id={news.id}' if hasattr(news, 'id') else news_url,
+                            'uri': f'{base_url}/liff/news?article_id={news.id}',
                         },
                         'style': 'primary',
                         'color': CLR_DARK,
@@ -578,16 +577,14 @@ class LineFlexTemplate(models.AbstractModel):
             },
         }
 
-        # 如果有圖片 URL，加 hero image（LINE 要求 https）
-        image_url = getattr(news, 'image_url', '') or ''
-        if not image_url and getattr(news, 'image', None):
-            image_url = f'{base_url}/web/image/line.news/{news.id}/image'
-        if image_url:
+        # Hero image: 本地上傳圖片透過公開端點提供
+        if news.image:
+            img_url = f'{base_url}/liff/news/image/{news.id}'
             # LINE Flex Message 圖片 URL 必須是 https
-            image_url = image_url.replace('http://', 'https://', 1)
+            img_url = img_url.replace('http://', 'https://', 1)
             result['hero'] = {
                 'type': 'image',
-                'url': image_url,
+                'url': img_url,
                 'size': 'full',
                 'aspectRatio': '20:13',
                 'aspectMode': 'cover',

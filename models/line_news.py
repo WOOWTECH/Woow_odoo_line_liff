@@ -15,6 +15,7 @@ class LineNews(models.Model):
     也可推播 Flex Message 給所有 LINE 好友（可重複推播）。
     """
     _name = 'line.news'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
     _description = '最新消息'
     _order = 'published_date desc, create_date desc'
     _rec_name = 'title'
@@ -23,7 +24,10 @@ class LineNews(models.Model):
     summary = fields.Text(string='摘要', help='在列表頁顯示的簡短摘要')
     body = fields.Html(string='內容', sanitize=True)
     image = fields.Binary(string='封面圖片', attachment=True)
-    image_url = fields.Char(string='封面圖片 URL', help='外部圖片連結（優先於上傳圖片）')
+    card_url = fields.Char(
+        string='閱讀全文 URL', compute='_compute_card_url',
+        help='LINE Flex 卡片「閱讀全文」按鈕連結',
+    )
     published_date = fields.Date(string='發佈日期', default=fields.Date.today)
     author_id = fields.Many2one(
         'res.users', string='作者',
@@ -44,6 +48,12 @@ class LineNews(models.Model):
     def _compute_is_published(self):
         for rec in self:
             rec.is_published = rec.state == 'published'
+
+    def _compute_card_url(self):
+        base_url = self.env['ir.config_parameter'].sudo().get_param(
+            'web.base.url', '')
+        for rec in self:
+            rec.card_url = f'{base_url}/liff/news?article_id={rec.id}' if rec.id else False
 
     def action_publish(self):
         """確認發佈文章"""

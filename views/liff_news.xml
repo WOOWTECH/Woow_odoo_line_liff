@@ -24,11 +24,7 @@
                         <t t-foreach="news_list" t-as="article">
                             <a t-attf-href="/liff/news?article_id=#{article.id}" class="liff-news-card">
                                 <t t-if="article.image">
-                                    <img t-attf-src="/web/image/line.news/#{article.id}/image/80x80"
-                                         class="liff-news-card-img" alt="" loading="lazy"/>
-                                </t>
-                                <t t-elif="article.image_url">
-                                    <img t-att-src="article.image_url"
+                                    <img t-attf-src="/liff/news/image/#{article.id}"
                                          class="liff-news-card-img" alt="" loading="lazy"/>
                                 </t>
                                 <div class="liff-news-card-body">
@@ -79,11 +75,7 @@
                 <!-- 文章內容 -->
                 <div class="liff-news-detail">
                     <t t-if="article.image">
-                        <img t-attf-src="/web/image/line.news/#{article.id}/image"
-                             class="liff-news-detail-hero" alt="" loading="lazy"/>
-                    </t>
-                    <t t-elif="article.image_url">
-                        <img t-att-src="article.image_url"
+                        <img t-attf-src="/liff/news/image/#{article.id}"
                              class="liff-news-detail-hero" alt="" loading="lazy"/>
                     </t>
                     <div class="liff-news-detail-content">
