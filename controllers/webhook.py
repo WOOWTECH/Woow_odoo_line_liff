@@ -269,6 +269,11 @@ class LineWebhookController(http.Controller):
         if not booking.exists():
             return
 
+        # 擁有者驗證：確認此 LINE 用戶有權查看此預約
+        if not self._verify_booking_ownership(line_uid, booking):
+            _logger.warning('view_booking: LINE user %s not owner of booking %s', line_uid, booking_id)
+            return
+
         flex = request.env['line.flex.template'].sudo().build_booking_confirmed(booking)
         request.env['line.api.service'].sudo().reply(reply_token, [{
             'type': 'flex',

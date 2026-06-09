@@ -28,14 +28,17 @@ class MailNotificationLine(models.Model):
         if auto_push not in ('True', 'true', '1'):
             return notifications
 
-        self._push_line_notifications(notifications)
+        try:
+            self._push_line_notifications(notifications)
+        except Exception:
+            _logger.exception('LINE auto-push top-level error (mail.notification.create unaffected)')
         return notifications
 
     def _push_line_notifications(self, notifications):
         """Push LINE notifications for eligible mail.notification records."""
         LineUser = self.env['line.user'].sudo()
-        factory = self.env['line.flex.factory']
-        api_service = self.env['line.api.service']
+        factory = self.env['line.flex.factory'].sudo()
+        api_service = self.env['line.api.service'].sudo()
 
         seen_messages = set()
 

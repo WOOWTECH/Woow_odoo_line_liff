@@ -110,11 +110,9 @@ class LiffApiController(http.Controller):
         except (json.JSONDecodeError, UnicodeDecodeError):
             body = {}
 
-        partner_id = body.get('partner_id')
-
-        if partner_id:
-            # 指定 partner_id 綁定
-            success = line_user.bind_partner(int(partner_id))
+        # 安全性：禁止指定任意 partner_id 綁定（防止帳號劫持）
+        # 僅允許自動建立或 email 匹配綁定
+        partner_id = None
             if success:
                 return Response(
                     json.dumps({

@@ -189,7 +189,7 @@ class LiffRedirectController(http.Controller):
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
 (function(){{
-var liffId='{liff_id}',target='{target}';
+var liffId={json.dumps(liff_id)},target={json.dumps(target)};
 var fallbacks={json.dumps(direct_urls)};
 function fb(){{var u=fallbacks[target]||'/appointment/1/schedule';window.location.href=u;}}
 if(!liffId||typeof liff==='undefined'){{fb();return;}}
