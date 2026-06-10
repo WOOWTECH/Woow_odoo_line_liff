@@ -12,3 +12,5 @@ access_line_richmenu_alias_manager,line.richmenu.alias.manager,model_line_richme
 access_line_news_user,line.news.user,model_line_news,woow_line_base.group_line_user,1,0,0,0
 access_line_news_manager,line.news.manager,model_line_news,woow_line_base.group_line_manager,1,1,1,1
 access_line_news_public,line.news.public,model_line_news,base.group_public,1,0,0,0
+access_line_auto_reply_user,line.auto.reply.user,model_line_auto_reply,woow_line_base.group_line_user,1,0,0,0
+access_line_auto_reply_manager,line.auto.reply.manager,model_line_auto_reply,woow_line_base.group_line_manager,1,1,1,1

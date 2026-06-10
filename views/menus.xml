@@ -24,6 +24,14 @@
               action="action_line_news"
               sequence="15"/>
 
+    <!-- 關鍵字自動回覆 -->
+    <menuitem id="menu_line_auto_reply"
+              name="關鍵字自動回覆"
+              parent="menu_line_bridge_root"
+              action="action_line_auto_reply"
+              sequence="16"
+              groups="woow_line_base.group_line_manager"/>
+
     <!-- Rich Menu 管理（別名已整合到表單內） -->
     <menuitem id="menu_line_richmenu"
               name="Rich Menu"

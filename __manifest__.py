@@ -32,6 +32,7 @@
         'security/ir.model.access.csv',
         # 2. 資料
         'data/ir_config_parameter.xml',
+        'data/line_auto_reply_data.xml',
         'data/line_flex_templates.xml',
         'data/mail_template.xml',
         # 3. 視圖
@@ -41,6 +42,7 @@
         'views/res_partner_views.xml',
         'views/res_config_settings_views.xml',
         'views/line_news_views.xml',
+        'views/line_auto_reply_views.xml',
         'views/menus.xml',
     ],
     'assets': {

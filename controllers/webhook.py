@@ -4,6 +4,7 @@
 # 接收 LINE Platform 的 Webhook 事件，驗簽後處理
 import json
 import logging
+import re
 
 from odoo import http
 from odoo.http import request, Response
@@ -283,8 +284,10 @@ class LineWebhookController(http.Controller):
 
     def _postback_rebook(self, event, line_uid, params, reply_token):
         """重新預約（postback）"""
-        base_url = request.env['ir.config_parameter'].sudo().get_param('web.base.url', '')
-        rebook_url = f'{base_url}/liff/redirect/book'
+        ICP = request.env['ir.config_parameter'].sudo()
+        base_url = ICP.get_param('web.base.url', '')
+        rebook_path = ICP.get_param('woow_line_bridge.rebook_path', '/liff/redirect/book')
+        rebook_url = f'{base_url}{rebook_path}'
         request.env['line.api.service'].sudo().reply(reply_token, [{
             'type': 'text',
             'text': f'請點擊連結重新預約：\n{rebook_url}',
@@ -308,9 +311,11 @@ class LineWebhookController(http.Controller):
         flex_tmpl = request.env['line.flex.template'].sudo()
 
         if target == 'contact':
+            ICP = request.env['ir.config_parameter'].sudo()
+            reply_text = ICP.get_param('woow_line_bridge.richmenu_contact_text', '歡迎直接傳訊息給我們，將由專人為您服務！')
             request.env['line.api.service'].sudo().reply(reply_token, [{
                 'type': 'text',
-                'text': '歡迎直接傳訊息給我們，將由專人為您服務！',
+                'text': reply_text,
             }])
             return
 
@@ -354,26 +359,35 @@ class LineWebhookController(http.Controller):
             })
 
     def _match_keyword(self, text):
-        """比對關鍵字並回覆"""
-        ICP = request.env['ir.config_parameter'].sudo()
-        shop_name = ICP.get_param('woow_line_bridge.shop_name', '')
-        shop_phone = ICP.get_param('woow_line_bridge.shop_phone', '')
-        shop_address = ICP.get_param('woow_line_bridge.shop_address', '')
+        """比對 DB 關鍵字規則並回覆"""
+        from collections import defaultdict
+        AutoReply = request.env['line.auto.reply'].sudo()
+        rules = AutoReply.search([('active', '=', True)], order='sequence, id')
+        text_lower = text.lower().strip()
 
-        keywords = {
-            '預約': '請點擊下方選單的「立即預約」，或直接前往我們的預約頁面',
-            '電話': f'{shop_name} 電話：{shop_phone}' if shop_phone else '請透過 LINE 與我們聯繫',
-            '地址': f'{shop_name} 地址：{shop_address}' if shop_address else '請透過 LINE 與我們聯繫',
-            '營業時間': ICP.get_param('woow_line_bridge.shop_opening_hours', '請透過 LINE 與我們聯繫'),
-            '你好': f'您好！歡迎來到{shop_name}\n有任何問題歡迎隨時詢問！',
-            '哈囉': f'您好！歡迎來到{shop_name}\n有任何問題歡迎隨時詢問！',
-            'hi': f'您好！歡迎來到{shop_name}\n有任何問題歡迎隨時詢問！',
-            'hello': f'您好！歡迎來到{shop_name}\n有任何問題歡迎隨時詢問！',
-        }
+        for rule in rules:
+            kw = rule.keyword.lower().strip()
+            matched = False
+            if rule.match_type == 'contains':
+                matched = kw in text_lower
+            elif rule.match_type == 'exact':
+                matched = kw == text_lower
+            elif rule.match_type == 'regex':
+                try:
+                    matched = bool(re.search(rule.keyword, text, re.IGNORECASE))
+                except re.error:
+                    continue
 
-        text_lower = text.lower()
-        for keyword, response in keywords.items():
-            if keyword in text_lower:
-                return response
-
+            if matched:
+                ICP = request.env['ir.config_parameter'].sudo()
+                placeholders = defaultdict(str, {
+                    'shop_name': ICP.get_param('woow_line_bridge.shop_name', ''),
+                    'shop_phone': ICP.get_param('woow_line_bridge.shop_phone', ''),
+                    'shop_address': ICP.get_param('woow_line_bridge.shop_address', ''),
+                    'shop_hours': ICP.get_param('woow_line_bridge.shop_opening_hours', ''),
+                })
+                try:
+                    return rule.response_text.format_map(placeholders)
+                except (KeyError, ValueError):
+                    return rule.response_text
         return None

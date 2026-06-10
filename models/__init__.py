@@ -12,3 +12,4 @@ from . import mail_notification_line
 from . import res_partner
 from . import res_config_settings
 from . import line_news
+from . import line_auto_reply

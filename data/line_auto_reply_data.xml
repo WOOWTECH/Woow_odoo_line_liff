@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- woow_line_bridge/data/line_auto_reply_data.xml -->
+<!-- 關鍵字自動回覆種子資料 -->
+<odoo>
+    <data noupdate="1">
+
+        <record id="auto_reply_booking" model="line.auto.reply">
+            <field name="name">預約</field>
+            <field name="keyword">預約</field>
+            <field name="match_type">contains</field>
+            <field name="response_text">請點擊下方選單的「立即預約」，或直接前往我們的預約頁面</field>
+            <field name="sequence">10</field>
+        </record>
+
+        <record id="auto_reply_phone" model="line.auto.reply">
+            <field name="name">電話</field>
+            <field name="keyword">電話</field>
+            <field name="match_type">contains</field>
+            <field name="response_text">{shop_name} 電話：{shop_phone}</field>
+            <field name="sequence">10</field>
+        </record>
+
+        <record id="auto_reply_address" model="line.auto.reply">
+            <field name="name">地址</field>
+            <field name="keyword">地址</field>
+            <field name="match_type">contains</field>
+            <field name="response_text">{shop_name} 地址：{shop_address}</field>
+            <field name="sequence">10</field>
+        </record>
+
+        <record id="auto_reply_hours" model="line.auto.reply">
+            <field name="name">營業時間</field>
+            <field name="keyword">營業時間</field>
+            <field name="match_type">contains</field>
+            <field name="response_text">{shop_name} 營業時間：{shop_hours}</field>
+            <field name="sequence">10</field>
+        </record>
+
+        <record id="auto_reply_hello_1" model="line.auto.reply">
+            <field name="name">你好</field>
+            <field name="keyword">你好</field>
+            <field name="match_type">contains</field>
+            <field name="response_text">您好！歡迎來到{shop_name}
+有任何問題歡迎隨時詢問！</field>
+            <field name="sequence">50</field>
+        </record>
+
+        <record id="auto_reply_hello_2" model="line.auto.reply">
+            <field name="name">哈囉</field>
+            <field name="keyword">哈囉</field>
+            <field name="match_type">contains</field>
+            <field name="response_text">您好！歡迎來到{shop_name}
+有任何問題歡迎隨時詢問！</field>
+            <field name="sequence">50</field>
+        </record>
+
+        <record id="auto_reply_hi" model="line.auto.reply">
+            <field name="name">hi</field>
+            <field name="keyword">hi</field>
+            <field name="match_type">exact</field>
+            <field name="response_text">您好！歡迎來到{shop_name}
+有任何問題歡迎隨時詢問！</field>
+            <field name="sequence">50</field>
+        </record>
+
+        <record id="auto_reply_hello" model="line.auto.reply">
+            <field name="name">hello</field>
+            <field name="keyword">hello</field>
+            <field name="match_type">exact</field>
+            <field name="response_text">您好！歡迎來到{shop_name}
+有任何問題歡迎隨時詢問！</field>
+            <field name="sequence">50</field>
+        </record>
+
+    </data>
+</odoo>

@@ -57,5 +57,17 @@
             <field name="value"></field>
         </record>
 
+        <!-- 重新預約路徑 -->
+        <record id="config_rebook_path" model="ir.config_parameter">
+            <field name="key">woow_line_bridge.rebook_path</field>
+            <field name="value">/liff/redirect/book</field>
+        </record>
+
+        <!-- Rich Menu 聯絡回覆文字 -->
+        <record id="config_richmenu_contact_text" model="ir.config_parameter">
+            <field name="key">woow_line_bridge.richmenu_contact_text</field>
+            <field name="value">歡迎直接傳訊息給我們，將由專人為您服務！</field>
+        </record>
+
     </data>
 </odoo>

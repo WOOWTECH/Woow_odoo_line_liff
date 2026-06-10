@@ -1,0 +1,80 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- woow_line_bridge/views/line_auto_reply_views.xml -->
+<!-- 關鍵字自動回覆視圖 -->
+<odoo>
+
+    <!-- Tree View -->
+    <record id="view_line_auto_reply_tree" model="ir.ui.view">
+        <field name="name">line.auto.reply.tree</field>
+        <field name="model">line.auto.reply</field>
+        <field name="arch" type="xml">
+            <tree editable="bottom">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="keyword"/>
+                <field name="match_type"/>
+                <field name="response_text" widget="char"/>
+                <field name="active"/>
+            </tree>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="view_line_auto_reply_form" model="ir.ui.view">
+        <field name="name">line.auto.reply.form</field>
+        <field name="model">line.auto.reply</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <field name="active" widget="boolean_button"
+                               options='{"terminology": "archive"}'/>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="keyword"/>
+                            <field name="match_type"/>
+                            <field name="sequence"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="response_text" widget="text"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Search View -->
+    <record id="view_line_auto_reply_search" model="ir.ui.view">
+        <field name="name">line.auto.reply.search</field>
+        <field name="model">line.auto.reply</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="keyword"/>
+                <field name="name"/>
+                <filter name="filter_active" string="啟用中"
+                        domain="[('active', '=', True)]"/>
+                <filter name="filter_inactive" string="已停用"
+                        domain="[('active', '=', False)]"/>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_line_auto_reply" model="ir.actions.act_window">
+        <field name="name">關鍵字自動回覆</field>
+        <field name="res_model">line.auto.reply</field>
+        <field name="view_mode">tree,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                新增關鍵字自動回覆規則
+            </p>
+            <p>
+                設定當用戶傳送特定關鍵字時，自動回覆的訊息內容。
+            </p>
+        </field>
+    </record>
+
+</odoo>
