@@ -37,6 +37,8 @@ class LiffRedirectController(http.Controller):
         'my-bookings': '/my/ext-bookings',
         'profile': '/my/account',
         'home': '/my/home',
+        'orders': '/my/orders',
+        'invoices': '/my/invoices',
     }
 
     # ------------------------------------------------------------------
@@ -176,6 +178,8 @@ class LiffRedirectController(http.Controller):
             'my-bookings': '/my/ext-bookings',
             'profile': '/my/account',
             'home': '/my/home',
+            'orders': '/my/orders',
+            'invoices': '/my/invoices',
         }
 
         html = f"""<!DOCTYPE html>
