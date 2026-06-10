@@ -94,13 +94,7 @@
                                     <field name="width"/>
                                     <field name="height"/>
                                     <field name="action_type"/>
-                                    <field name="action_portal_path" invisible="action_type != 'liff_portal'"
-                                           placeholder="/home"/>
-                                    <field name="action_uri" invisible="action_type != 'uri'"/>
-                                    <field name="action_text" invisible="action_type != 'message'"/>
-                                    <field name="action_data" invisible="action_type not in ('postback', 'datetimepicker', 'richmenuswitch')"/>
-                                    <field name="action_richmenu_alias" invisible="action_type != 'richmenuswitch'"/>
-                                    <field name="action_clipboard_text" invisible="action_type != 'clipboard'"/>
+                                    <field name="action_value"/>
                                     <field name="action_mode" invisible="action_type != 'datetimepicker'"/>
                                 </list>
                             </field>

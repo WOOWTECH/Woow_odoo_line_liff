@@ -231,50 +231,74 @@ class LineRichMenuArea(models.Model):
         ('clipboard', '複製文字'),
     ], string='動作類型', required=True, default='uri')
 
-    action_portal_path = fields.Char(
-        'Portal 路徑', help='例如 /home、/book、/my-bookings、/profile')
-    action_uri = fields.Char('URL')
-    action_text = fields.Char('訊息文字')
-    action_data = fields.Char('Postback Data')
-    action_richmenu_alias = fields.Char('目標 Rich Menu Alias')
-    action_clipboard_text = fields.Char('複製文字')
+    # 統一值欄位：根據 action_type 填入對應內容
+    action_value = fields.Char('值', help=(
+        'URL → 完整網址\n'
+        'Portal → 路徑如 /home、/book\n'
+        '訊息 → 發送的文字\n'
+        'Postback → data 字串\n'
+        '日期選擇 → data 字串\n'
+        '切換 Menu → 目標別名 ID\n'
+        '複製文字 → 要複製的內容'
+    ))
     action_mode = fields.Selection([
         ('date', '日期'), ('time', '時間'), ('datetime', '日期時間'),
-    ], string='選擇器模式', default='date')
+    ], string='模式', default='date')
 
-    def _get_portal_url(self):
-        """組合 LIFF Portal URL"""
-        path = (self.action_portal_path or '').lstrip('/')
-        ICP = self.env['ir.config_parameter'].sudo()
-        liff_id = ICP.get_param('woow_line_bridge.liff_id_member', '')
-        if liff_id:
-            return f'https://liff.line.me/{liff_id}/{path}'
-        base_url = ICP.get_param('web.base.url', '')
-        return f'{base_url}/liff/redirect/{path}'
+    # 舊欄位保留供向下相容（新記錄統一用 action_value）
+    action_portal_path = fields.Char('Portal 路徑 (舊)')
+    action_uri = fields.Char('URL (舊)')
+    action_text = fields.Char('訊息文字 (舊)')
+    action_data = fields.Char('Postback Data (舊)')
+    action_richmenu_alias = fields.Char('Alias (舊)')
+    action_clipboard_text = fields.Char('複製文字 (舊)')
+
+    def _get_action_value(self):
+        """取得動作值（優先 action_value，向下相容舊欄位）"""
+        if self.action_value:
+            return self.action_value
+        mapping = {
+            'uri': self.action_uri,
+            'liff_portal': self.action_portal_path,
+            'message': self.action_text,
+            'postback': self.action_data,
+            'datetimepicker': self.action_data,
+            'richmenuswitch': self.action_richmenu_alias,
+            'clipboard': self.action_clipboard_text,
+        }
+        return mapping.get(self.action_type) or ''
 
     def _build_action(self):
         """組裝 LINE action object"""
         action = {'type': self.action_type}
         if self.label:
             action['label'] = self.label
+        val = self._get_action_value()
 
         if self.action_type == 'uri':
-            action['uri'] = self.action_uri or '#'
+            action['uri'] = val or '#'
         elif self.action_type == 'liff_portal':
             action['type'] = 'uri'
-            action['uri'] = self._get_portal_url()
+            path = (val or '').lstrip('/')
+            ICP = self.env['ir.config_parameter'].sudo()
+            liff_id = ICP.get_param('woow_line_bridge.liff_id_member', '')
+            if liff_id:
+                action['uri'] = f'https://liff.line.me/{liff_id}/{path}'
+            else:
+                base_url = ICP.get_param('web.base.url', '')
+                action['uri'] = f'{base_url}/liff/redirect/{path}'
         elif self.action_type == 'message':
-            action['text'] = self.action_text or ''
+            action['text'] = val or ''
         elif self.action_type == 'postback':
-            action['data'] = self.action_data or ''
+            action['data'] = val or ''
         elif self.action_type == 'datetimepicker':
-            action['data'] = self.action_data or 'datetime_select'
+            action['data'] = val or 'datetime_select'
             action['mode'] = self.action_mode or 'date'
         elif self.action_type == 'richmenuswitch':
-            action['richMenuAliasId'] = self.action_richmenu_alias or ''
-            action['data'] = self.action_data or 'switch_menu'
+            action['richMenuAliasId'] = val or ''
+            action['data'] = 'switch_menu'
         elif self.action_type == 'clipboard':
-            action['clipboardText'] = self.action_clipboard_text or ''
+            action['clipboardText'] = val or ''
 
         return action
 
