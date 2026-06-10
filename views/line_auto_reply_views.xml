@@ -8,14 +8,14 @@
         <field name="name">line.auto.reply.tree</field>
         <field name="model">line.auto.reply</field>
         <field name="arch" type="xml">
-            <tree editable="bottom">
+            <list editable="bottom">
                 <field name="sequence" widget="handle"/>
                 <field name="name"/>
                 <field name="keyword"/>
                 <field name="match_type"/>
-                <field name="response_text" widget="char"/>
+                <field name="response_text"/>
                 <field name="active"/>
-            </tree>
+            </list>
         </field>
     </record>
 
@@ -26,10 +26,7 @@
         <field name="arch" type="xml">
             <form>
                 <sheet>
-                    <div class="oe_button_box" name="button_box">
-                        <field name="active" widget="boolean_button"
-                               options='{"terminology": "archive"}'/>
-                    </div>
+                    <div class="oe_button_box" name="button_box"/>
                     <group>
                         <group>
                             <field name="name"/>
