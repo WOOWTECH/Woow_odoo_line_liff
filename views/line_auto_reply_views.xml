@@ -63,7 +63,7 @@
     <record id="action_line_auto_reply" model="ir.actions.act_window">
         <field name="name">關鍵字自動回覆</field>
         <field name="res_model">line.auto.reply</field>
-        <field name="view_mode">tree,form</field>
+        <field name="view_mode">list,form</field>
         <field name="help" type="html">
             <p class="o_view_nocontent_smiling_face">
                 新增關鍵字自動回覆規則
