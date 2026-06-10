@@ -193,16 +193,22 @@ class LiffRedirectController(http.Controller):
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
 (function(){{
-var liffId={json.dumps(liff_id)},target={json.dumps(target)};
+var serverTarget={json.dumps(target)};
 var fallbacks={json.dumps(direct_urls)};
-function fb(){{var u=fallbacks[target]||'/appointment/1/schedule';window.location.href=u;}}
+var liffId={json.dumps(liff_id)};
+// LIFF init() 可能觸發登入跳轉，跳回後路徑遺失。用 sessionStorage 保存 target。
+var target=serverTarget;
+if(target&&target!=='book'){{sessionStorage.setItem('liff_target',target);}}
+else{{var saved=sessionStorage.getItem('liff_target');if(saved){{target=saved;}}}}
+function fb(){{sessionStorage.removeItem('liff_target');var u=fallbacks[target]||'/appointment/1/schedule';window.location.href=u;}}
 if(!liffId||typeof liff==='undefined'){{fb();return;}}
 liff.init({{liffId:liffId}}).then(function(){{
-  if(!liff.isLoggedIn()){{fb();return;}}
+  if(!liff.isLoggedIn()){{liff.login({{redirectUri:window.location.origin+'/liff/redirect/'+target}});return;}}
   var t=null,a=null;
   try{{t=liff.getIDToken();}}catch(e){{}}
   try{{a=liff.getAccessToken();}}catch(e){{}}
   if(!t&&!a){{fb();return;}}
+  sessionStorage.removeItem('liff_target');
   var f=document.createElement('form');f.method='POST';f.action='/liff/redirect/'+target;
   if(t){{var i=document.createElement('input');i.type='hidden';i.name='id_token';i.value=t;f.appendChild(i);}}
   if(a){{var i2=document.createElement('input');i2.type='hidden';i2.name='access_token';i2.value=a;f.appendChild(i2);}}
