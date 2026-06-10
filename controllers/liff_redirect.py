@@ -199,7 +199,7 @@ liff.init({{liffId:liffId}}).then(function(){{
   try{{t=liff.getIDToken();}}catch(e){{}}
   try{{a=liff.getAccessToken();}}catch(e){{}}
   if(!t&&!a){{fb();return;}}
-  var f=document.createElement('form');f.method='POST';f.action=window.location.pathname;
+  var f=document.createElement('form');f.method='POST';f.action='/liff/redirect/'+target;
   if(t){{var i=document.createElement('input');i.type='hidden';i.name='id_token';i.value=t;f.appendChild(i);}}
   if(a){{var i2=document.createElement('input');i2.type='hidden';i2.name='access_token';i2.value=a;f.appendChild(i2);}}
   document.body.appendChild(f);f.submit();
