@@ -307,11 +307,15 @@ liff.init({{liffId:liffId}}).then(function(){{
 
         try:
             portal_group = request.env.ref('base.group_portal')
+            # auth='none' 下無預設公司，需明確指定
+            main_company = request.env['res.company'].sudo().search([], limit=1, order='id')
             user = Users.with_context(no_reset_password=True).create({
                 'name': partner.name,
                 'login': login,
                 'password': password,
                 'partner_id': partner.id,
+                'company_id': main_company.id,
+                'company_ids': [(6, 0, [main_company.id])],
                 'groups_id': [(6, 0, [portal_group.id])],
             })
             _logger.info('建立 portal user: %s (partner: %s)', login, partner.name)
