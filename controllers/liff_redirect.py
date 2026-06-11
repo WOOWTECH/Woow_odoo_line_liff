@@ -293,9 +293,14 @@ liff.init({{liffId:liffId}}).then(function(){{
 
         :param partner: res.partner record
         :param login: 登入帳號（通常是 email）
-        :return: res.users record
+        :return: res.users record or None
         """
-        Users = request.env['res.users'].sudo()
+        from odoo import api, SUPERUSER_ID
+
+        # auth='none' 下 request.env.uid 為 None，ORM 內部 cache 以 uid 為 key
+        # 會導致 KeyError。必須建立完整的 SUPERUSER 環境。
+        env = api.Environment(request.env.cr, SUPERUSER_ID, {})
+        Users = env['res.users']
 
         # 檢查是否已有 user
         existing = Users.search([('login', '=', login)], limit=1)
@@ -306,11 +311,8 @@ liff.init({{liffId:liffId}}).then(function(){{
         password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
 
         try:
-            portal_group = request.env.ref('base.group_portal')
-            # auth='none' 下無預設公司，需明確指定
-            main_company = request.env['res.company'].sudo().search([], limit=1, order='id')
-            # 分兩步建立：先建 user（不帶 groups_id），再加 portal 群組
-            # 避免 auth='none' 下 groups_id 後處理 ValueError
+            portal_group = env.ref('base.group_portal')
+            main_company = env['res.company'].search([], limit=1, order='id')
             user = Users.with_context(no_reset_password=True).create({
                 'name': partner.name,
                 'login': login,
@@ -318,8 +320,8 @@ liff.init({{liffId:liffId}}).then(function(){{
                 'partner_id': partner.id,
                 'company_id': main_company.id,
                 'company_ids': [(6, 0, [main_company.id])],
+                'groups_id': [(6, 0, [portal_group.id])],
             })
-            user.write({'groups_id': [(4, portal_group.id)]})
             _logger.info('建立 portal user: %s (partner: %s)', login, partner.name)
             return user
         except Exception:
