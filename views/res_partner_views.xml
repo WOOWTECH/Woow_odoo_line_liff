@@ -22,7 +22,7 @@
             <!-- 在 internal_notes 頁籤後加入 LINE 分頁 -->
             <xpath expr="//page[@name='internal_notes']" position="after">
                 <page string="LINE 整合" name="line_integration"
-                      groups="woow_line_base.group_line_user">
+                      groups="woow_line_base.group_line_manager">
                     <group string="LINE 帳號">
                         <field name="line_user_ids" nolabel="1">
                             <list create="0" edit="0">

@@ -8,7 +8,7 @@
               name="LINE Bridge"
               sequence="90"
               web_icon="woow_line_bridge,static/description/icon.png"
-              groups="woow_line_base.group_line_user"/>
+              groups="woow_line_base.group_line_manager"/>
 
     <!-- LINE 設定檔（POS 風格多實體） -->
     <menuitem id="menu_line_liff_config"
