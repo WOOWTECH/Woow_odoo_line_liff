@@ -7,6 +7,14 @@ from odoo import fields, models
 class LineUserBridge(models.Model):
     _inherit = 'line.user'
 
+    # LIFF 設定檔來源
+    liff_config_id = fields.Many2one(
+        'line.liff.config',
+        string='LIFF 設定檔',
+        ondelete='set null', index=True,
+        help='此用戶來自的 LINE LIFF 設定檔',
+    )
+
     # Rich Menu（richmenu model 從 base 搬到 bridge）
     current_richmenu_id = fields.Many2one(
         'line.richmenu',

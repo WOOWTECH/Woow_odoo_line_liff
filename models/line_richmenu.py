@@ -16,6 +16,11 @@ class LineRichMenu(models.Model):
     _description = 'LINE Rich Menu'
     _order = 'sequence, id desc'
 
+    config_id = fields.Many2one(
+        'line.liff.config', string='LINE 設定檔',
+        ondelete='cascade',
+        default=lambda self: self.env['line.liff.config']._get_default_config(),
+        help='此 Rich Menu 屬於的 LINE 設定檔')
     name = fields.Char('名稱', required=True)
     sequence = fields.Integer('排序', default=10)
     chat_bar_text = fields.Char('底部按鈕文字', default='選單',

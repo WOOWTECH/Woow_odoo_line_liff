@@ -36,6 +36,7 @@
         'data/line_flex_templates.xml',
         'data/mail_template.xml',
         # 3. 視圖
+        'views/line_liff_config_views.xml',
         'views/line_logs_views.xml',
         'views/line_richmenu_views.xml',
         'views/line_user_views.xml',

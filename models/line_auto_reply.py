@@ -11,6 +11,10 @@ class LineAutoReply(models.Model):
     _description = 'LINE 關鍵字自動回覆'
     _order = 'sequence, id'
 
+    config_id = fields.Many2one(
+        'line.liff.config', string='LINE 設定檔',
+        ondelete='set null',
+        help='指定設定檔專用規則（留空=全域規則）')
     name = fields.Char('名稱', required=True)
     keyword = fields.Char('關鍵字', required=True, help='比對的關鍵字或正規表達式')
     match_type = fields.Selection([

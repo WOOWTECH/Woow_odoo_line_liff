@@ -20,6 +20,9 @@ class LineNews(models.Model):
     _order = 'published_date desc, create_date desc'
     _rec_name = 'title'
 
+    config_id = fields.Many2one(
+        'line.liff.config', string='LINE 設定檔',
+        default=lambda self: self.env['line.liff.config']._get_default_config())
     title = fields.Char(string='標題', required=True)
     summary = fields.Text(string='摘要', help='在列表頁顯示的簡短摘要')
     body = fields.Html(string='內容', sanitize=True)

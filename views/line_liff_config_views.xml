@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- LINE LIFF 設定檔視圖 -->
+<odoo>
+
+    <!-- List View -->
+    <record id="line_liff_config_view_list" model="ir.ui.view">
+        <field name="name">line.liff.config.list</field>
+        <field name="model">line.liff.config</field>
+        <field name="arch" type="xml">
+            <list string="LINE 設定檔">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="shop_name"/>
+                <field name="messaging_channel_id"/>
+                <field name="liff_id_member" optional="hide"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="active" column_invisible="True"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Form View -->
+    <record id="line_liff_config_view_form" model="ir.ui.view">
+        <field name="name">line.liff.config.form</field>
+        <field name="model">line.liff.config</field>
+        <field name="arch" type="xml">
+            <form string="LINE 設定檔">
+                <sheet>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name" placeholder="例如：Mark Studio LINE"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="active"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <!-- Tab 1: LINE API 憑證 -->
+                        <page string="API 憑證" name="credentials">
+                            <group>
+                                <group string="Messaging API">
+                                    <field name="messaging_channel_id"/>
+                                    <field name="messaging_channel_secret" password="True"/>
+                                    <field name="messaging_access_token" password="True"/>
+                                </group>
+                                <group string="LINE Login">
+                                    <field name="login_channel_id"/>
+                                    <field name="login_channel_secret" password="True"/>
+                                </group>
+                            </group>
+                            <group string="Webhook">
+                                <field name="webhook_url" widget="CopyClipboardChar"/>
+                            </group>
+                        </page>
+
+                        <!-- Tab 2: LIFF 設定 -->
+                        <page string="LIFF 設定" name="liff">
+                            <group>
+                                <group string="LIFF App IDs">
+                                    <field name="liff_id_member"/>
+                                    <field name="liff_id_news"/>
+                                    <field name="liff_id_locations"/>
+                                </group>
+                                <group string="端點 URL（唯讀）">
+                                    <field name="liff_endpoint_news" widget="CopyClipboardChar"/>
+                                    <field name="liff_endpoint_locations" widget="CopyClipboardChar"/>
+                                </group>
+                            </group>
+                        </page>
+
+                        <!-- Tab 3: 店家資訊 -->
+                        <page string="店家資訊" name="shop">
+                            <group>
+                                <group>
+                                    <field name="shop_name"/>
+                                    <field name="shop_address"/>
+                                    <field name="shop_phone"/>
+                                    <field name="shop_opening_hours"/>
+                                </group>
+                                <group>
+                                    <field name="shop_latitude"/>
+                                    <field name="shop_longitude"/>
+                                </group>
+                            </group>
+                        </page>
+
+                        <!-- Tab 4: 行為設定 -->
+                        <page string="行為設定" name="behavior">
+                            <group>
+                                <group>
+                                    <field name="auto_line_notify"/>
+                                    <field name="admin_line_user_id"/>
+                                </group>
+                                <group>
+                                    <field name="rebook_path"/>
+                                    <field name="richmenu_contact_text"/>
+                                </group>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_line_liff_config" model="ir.actions.act_window">
+        <field name="name">LINE 設定檔</field>
+        <field name="res_model">line.liff.config</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                建立您的第一個 LINE 設定檔
+            </p>
+            <p>每個設定檔代表一個 LINE 官方帳號的完整設定，包含 API 憑證、LIFF、店家資訊。</p>
+        </field>
+    </record>
+
+</odoo>

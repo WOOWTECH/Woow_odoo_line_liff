@@ -22,6 +22,9 @@ class LineEventLog(models.Model):
     # ------------------------------------------------------------------
     # 關聯欄位
     # ------------------------------------------------------------------
+    config_id = fields.Many2one(
+        'line.liff.config', string='LINE 設定檔',
+        ondelete='set null', index=True)
     line_user_id = fields.Many2one(
         'line.user',
         string='LINE 用戶',

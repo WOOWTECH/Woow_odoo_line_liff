@@ -10,6 +10,14 @@
               web_icon="woow_line_bridge,static/description/icon.png"
               groups="woow_line_base.group_line_user"/>
 
+    <!-- LINE 設定檔（POS 風格多實體） -->
+    <menuitem id="menu_line_liff_config"
+              name="LINE 設定檔"
+              parent="menu_line_bridge_root"
+              action="action_line_liff_config"
+              sequence="5"
+              groups="woow_line_base.group_line_manager"/>
+
     <!-- LINE 用戶管理（action 在 woow_line_base） -->
     <menuitem id="menu_line_users"
               name="LINE 用戶"
