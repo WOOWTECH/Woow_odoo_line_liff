@@ -312,7 +312,9 @@ liff.init({{liffId:liffId}}).then(function(){{
 
         try:
             portal_group = env.ref('base.group_portal')
+            internal_group = env.ref('base.group_user')
             main_company = env['res.company'].search([], limit=1, order='id')
+            # 先建立 user（SUPERUSER 預設會帶 internal group）
             user = Users.with_context(no_reset_password=True).create({
                 'name': partner.name,
                 'login': login,
@@ -320,8 +322,12 @@ liff.init({{liffId:liffId}}).then(function(){{
                 'partner_id': partner.id,
                 'company_id': main_company.id,
                 'company_ids': [(6, 0, [main_company.id])],
-                'groups_id': [(6, 0, [portal_group.id])],
             })
+            # 再明確切換為 portal user（移除 internal + 加入 portal）
+            user.write({'groups_id': [
+                (3, internal_group.id),
+                (4, portal_group.id),
+            ]})
             _logger.info('建立 portal user: %s (partner: %s)', login, partner.name)
             return user
         except Exception:
