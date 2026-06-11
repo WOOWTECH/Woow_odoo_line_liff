@@ -309,6 +309,8 @@ liff.init({{liffId:liffId}}).then(function(){{
             portal_group = request.env.ref('base.group_portal')
             # auth='none' 下無預設公司，需明確指定
             main_company = request.env['res.company'].sudo().search([], limit=1, order='id')
+            # 分兩步建立：先建 user（不帶 groups_id），再加 portal 群組
+            # 避免 auth='none' 下 groups_id 後處理 ValueError
             user = Users.with_context(no_reset_password=True).create({
                 'name': partner.name,
                 'login': login,
@@ -316,8 +318,8 @@ liff.init({{liffId:liffId}}).then(function(){{
                 'partner_id': partner.id,
                 'company_id': main_company.id,
                 'company_ids': [(6, 0, [main_company.id])],
-                'groups_id': [(6, 0, [portal_group.id])],
             })
+            user.write({'groups_id': [(4, portal_group.id)]})
             _logger.info('建立 portal user: %s (partner: %s)', login, partner.name)
             return user
         except Exception:
