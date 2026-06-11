@@ -64,7 +64,6 @@ class LineLiffConfig(models.Model):
     liff_endpoint_news = fields.Char('最新消息端點', compute='_compute_urls')
     liff_endpoint_locations = fields.Char('店家位置端點', compute='_compute_urls')
 
-    @api.depends('id')
     def _compute_urls(self):
         base_url = self.env['ir.config_parameter'].sudo().get_param(
             'web.base.url', '')
