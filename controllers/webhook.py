@@ -21,18 +21,37 @@ class LineWebhookController(http.Controller):
     2. 1 秒內回 200，業務邏輯不阻塞回應
     """
 
-    @http.route('/line/webhook', type='http', auth='public',
+    @http.route(['/line/webhook', '/line/webhook/<int:config_id>'],
+                type='http', auth='public',
                 methods=['POST'], csrf=False, save_session=False)
-    def webhook(self, **kwargs):
-        """LINE Webhook 主端點"""
+    def webhook(self, config_id=None, **kwargs):
+        """LINE Webhook 主端點（支援 per-config routing）"""
+        # 解析 config
+        Config = request.env['line.liff.config'].sudo()
+        if config_id:
+            config = Config.browse(config_id)
+            if not config.exists() or not config.active:
+                return Response('Invalid config', status=404)
+        else:
+            config = Config._get_default_config()
+
         body_bytes = request.httprequest.get_data()
         signature = request.httprequest.headers.get('X-Line-Signature', '')
 
-        # 驗證簽章
+        # 驗證簽章（用 config 的 channel_secret，fallback 到全域）
         api_service = request.env['line.api.service'].sudo()
-        if not api_service.verify_webhook_signature(body_bytes, signature):
+        if config and config.messaging_channel_secret:
+            if not api_service.verify_webhook_signature(
+                    body_bytes, signature,
+                    channel_secret=config.messaging_channel_secret):
+                _logger.warning('Webhook 簽章驗證失敗 (config=%s)', config.id)
+                return Response('Invalid signature', status=403)
+        elif not api_service.verify_webhook_signature(body_bytes, signature):
             _logger.warning('Webhook 簽章驗證失敗')
             return Response('Invalid signature', status=403)
+
+        # 將 config 存到 request context 供後續 handler 使用
+        request._line_config = config
 
         # 解析 JSON
         try:
@@ -88,8 +107,10 @@ class LineWebhookController(http.Controller):
         ]
         log_event_type = event_type if event_type in valid_event_types else 'other'
 
+        config = getattr(request, '_line_config', None)
         try:
             EventLog.create({
+                'config_id': config.id if config else False,
                 'line_user_id': line_user.id if line_user else False,
                 'event_type': log_event_type,
                 'message_type': message_type,
@@ -115,13 +136,21 @@ class LineWebhookController(http.Controller):
         _logger.info('收到 follow 事件: %s', line_uid)
         LineUser = request.env['line.user'].sudo()
 
-        line_user = LineUser.create_or_update_from_webhook(line_uid)
+        config = getattr(request, '_line_config', None)
+        line_user = LineUser.create_or_update_from_webhook(
+            line_uid,
+            messaging_channel_id=config.messaging_channel_id if config else None,
+            messaging_channel_name=config.name if config else None,
+        )
         from odoo import fields as odoo_fields
-        line_user.write({
+        update_vals = {
             'is_follower': True,
             'is_blocked': False,
             'follow_date': line_user.follow_date or odoo_fields.Datetime.now(),
-        })
+        }
+        if config and hasattr(line_user, 'liff_config_id'):
+            update_vals['liff_config_id'] = config.id
+        line_user.write(update_vals)
 
         self._fetch_and_update_profile(line_user)
 
@@ -284,9 +313,11 @@ class LineWebhookController(http.Controller):
 
     def _postback_rebook(self, event, line_uid, params, reply_token):
         """重新預約（postback）"""
+        config = getattr(request, '_line_config', None)
         ICP = request.env['ir.config_parameter'].sudo()
         base_url = ICP.get_param('web.base.url', '')
-        rebook_path = ICP.get_param('woow_line_bridge.rebook_path', '/liff/redirect/book')
+        rebook_path = (config.rebook_path if config and config.rebook_path
+                        else ICP.get_param('woow_line_bridge.rebook_path', '/liff/redirect/book'))
         rebook_url = f'{base_url}{rebook_path}'
         request.env['line.api.service'].sudo().reply(reply_token, [{
             'type': 'text',
@@ -295,9 +326,13 @@ class LineWebhookController(http.Controller):
 
     def _postback_navigate(self, event, line_uid, params, reply_token):
         """Google Maps 導航（postback）"""
-        ICP = request.env['ir.config_parameter'].sudo()
-        lat = ICP.get_param('woow_line_bridge.shop_latitude', '')
-        lng = ICP.get_param('woow_line_bridge.shop_longitude', '')
+        config = getattr(request, '_line_config', None)
+        if config:
+            lat, lng = config.shop_latitude or '', config.shop_longitude or ''
+        else:
+            ICP = request.env['ir.config_parameter'].sudo()
+            lat = ICP.get_param('woow_line_bridge.shop_latitude', '')
+            lng = ICP.get_param('woow_line_bridge.shop_longitude', '')
         if lat and lng:
             nav_url = f'https://www.google.com/maps/dir/?api=1&destination={lat},{lng}'
             request.env['line.api.service'].sudo().reply(reply_token, [{
@@ -311,8 +346,12 @@ class LineWebhookController(http.Controller):
         flex_tmpl = request.env['line.flex.template'].sudo()
 
         if target == 'contact':
-            ICP = request.env['ir.config_parameter'].sudo()
-            reply_text = ICP.get_param('woow_line_bridge.richmenu_contact_text', '歡迎直接傳訊息給我們，將由專人為您服務！')
+            config = getattr(request, '_line_config', None)
+            if config and config.richmenu_contact_text:
+                reply_text = config.richmenu_contact_text
+            else:
+                ICP = request.env['ir.config_parameter'].sudo()
+                reply_text = ICP.get_param('woow_line_bridge.richmenu_contact_text', '歡迎直接傳訊息給我們，將由專人為您服務！')
             request.env['line.api.service'].sudo().reply(reply_token, [{
                 'type': 'text',
                 'text': reply_text,
@@ -379,13 +418,23 @@ class LineWebhookController(http.Controller):
                     continue
 
             if matched:
-                ICP = request.env['ir.config_parameter'].sudo()
-                placeholders = defaultdict(str, {
-                    'shop_name': ICP.get_param('woow_line_bridge.shop_name', ''),
-                    'shop_phone': ICP.get_param('woow_line_bridge.shop_phone', ''),
-                    'shop_address': ICP.get_param('woow_line_bridge.shop_address', ''),
-                    'shop_hours': ICP.get_param('woow_line_bridge.shop_opening_hours', ''),
-                })
+                config = getattr(request, '_line_config', None)
+                if config:
+                    ph = {
+                        'shop_name': config.shop_name or '',
+                        'shop_phone': config.shop_phone or '',
+                        'shop_address': config.shop_address or '',
+                        'shop_hours': config.shop_opening_hours or '',
+                    }
+                else:
+                    ICP = request.env['ir.config_parameter'].sudo()
+                    ph = {
+                        'shop_name': ICP.get_param('woow_line_bridge.shop_name', ''),
+                        'shop_phone': ICP.get_param('woow_line_bridge.shop_phone', ''),
+                        'shop_address': ICP.get_param('woow_line_bridge.shop_address', ''),
+                        'shop_hours': ICP.get_param('woow_line_bridge.shop_opening_hours', ''),
+                    }
+                placeholders = defaultdict(str, ph)
                 try:
                     return rule.response_text.format_map(placeholders)
                 except (KeyError, ValueError):

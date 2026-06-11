@@ -169,8 +169,12 @@ class LiffRedirectController(http.Controller):
 
         使用 auth='none' 所以不能用 request.render()，直接回 HTML。
         """
-        ICP = request.env['ir.config_parameter'].sudo()
-        liff_id = ICP.get_param('woow_line_bridge.liff_id_member', '')
+        Config = request.env['line.liff.config'].sudo()
+        config = Config._get_default_config()
+        liff_id = config.liff_id_member if config else ''
+        if not liff_id:
+            ICP = request.env['ir.config_parameter'].sudo()
+            liff_id = ICP.get_param('woow_line_bridge.liff_id_member', '')
 
         # 直接跳轉對照表（fallback）
         direct_urls = {
