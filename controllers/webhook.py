@@ -87,6 +87,34 @@ class LineWebhookController(http.Controller):
         else:
             _logger.debug('未處理的事件類型: %s', event_type)
 
+        # 轉發事件到 LiveChat 模組（軟依賴）
+        self._forward_to_livechat(event)
+
+    def _forward_to_livechat(self, event):
+        """轉發 webhook 事件到 LiveChat LINE 模組（如已安裝）
+
+        解決路由衝突：bridge 的 /line/webhook/<int:config_id> 與
+        livechat 的 /line/webhook/<int:channel_id> 共用同一模式，
+        bridge 攔截所有請求。因此由 bridge 主動轉發。
+        """
+        try:
+            if 'im_livechat.channel' not in request.env:
+                return
+            # 檢查是否有啟用 LINE 的 LiveChat 頻道
+            LivechatChannel = request.env['im_livechat.channel'].sudo()
+            lc_channel = LivechatChannel.search([('line_enabled', '=', True)], limit=1)
+            if not lc_channel:
+                return
+            # 動態載入 LiveChat 控制器（避免硬依賴）
+            from odoo.addons.woow_odoo_livechat_line.controllers.webhook import (
+                LineWebhookController as LCController,
+            )
+            LCController()._process_event(event, lc_channel)
+        except ImportError:
+            pass
+        except Exception:
+            _logger.debug('LiveChat 轉發失敗', exc_info=True)
+
     def _log_event(self, event, event_type, line_uid):
         """記錄 Webhook 事件到 line.event.log"""
         EventLog = request.env['line.event.log'].sudo()

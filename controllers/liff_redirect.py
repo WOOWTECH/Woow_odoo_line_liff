@@ -193,35 +193,46 @@ class LiffRedirectController(http.Controller):
         html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Loading...</title>
-<style>body{{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#F5F5F5;margin:0;}}
+<style>body{{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#F5F5F5;margin:0;font-family:sans-serif;}}
 .s{{width:40px;height:40px;border:4px solid #E5E5E5;border-top-color:#333333;border-radius:50%;animation:r .8s linear infinite;margin:0 auto 16px;}}
-@keyframes r{{to{{transform:rotate(360deg)}}}}</style></head>
-<body><div style="text-align:center"><div class="s"></div>
-<p id="st" style="color:#666666;font-family:sans-serif;font-size:14px;">正在登入中...</p></div>
+@keyframes r{{to{{transform:rotate(360deg)}}}}
+.err{{color:#EF4444;font-size:13px;margin-top:12px;word-break:break-all;max-width:90vw;}}</style></head>
+<body><div style="text-align:center"><div class="s" id="sp"></div>
+<p id="st" style="color:#666666;font-size:14px;">正在登入中...</p>
+<p id="er" class="err" style="display:none;"></p></div>
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
 (function(){{
 var serverTarget={json.dumps(target)};
 var fallbacks={json.dumps(direct_urls)};
 var liffId={json.dumps(liff_id)};
-// LIFF init() 可能觸發登入跳轉，跳回後路徑遺失。用 sessionStorage 保存 target。
+var $st=document.getElementById('st');
+var $er=document.getElementById('er');
+var $sp=document.getElementById('sp');
+function showErr(msg){{$sp.style.display='none';$st.textContent='登入失敗';$er.style.display='block';$er.textContent=msg;}}
 var target=serverTarget;
 if(target&&target!=='book'){{sessionStorage.setItem('liff_target',target);}}
 else{{var saved=sessionStorage.getItem('liff_target');if(saved){{target=saved;}}}}
-function fb(){{sessionStorage.removeItem('liff_target');var u=fallbacks[target]||'/appointment/1/schedule';window.location.href=u;}}
-if(!liffId||typeof liff==='undefined'){{fb();return;}}
+function fb(reason){{
+  sessionStorage.removeItem('liff_target');
+  if(reason){{showErr(reason);return;}}
+  var u=fallbacks[target]||'/appointment/1/schedule';window.location.href=u;
+}}
+if(!liffId){{fb('LIFF ID 未設定');return;}}
+if(typeof liff==='undefined'){{fb('LIFF SDK 載入失敗');return;}}
 liff.init({{liffId:liffId}}).then(function(){{
-  if(!liff.isLoggedIn()){{liff.login({{redirectUri:window.location.origin+'/liff/redirect/'+target}});return;}}
+  if(!liff.isLoggedIn()){{$st.textContent='正在跳轉 LINE 登入...';liff.login({{redirectUri:window.location.origin+'/liff/redirect/'+target}});return;}}
+  $st.textContent='正在驗證身份...';
   var t=null,a=null;
   try{{t=liff.getIDToken();}}catch(e){{}}
   try{{a=liff.getAccessToken();}}catch(e){{}}
-  if(!t&&!a){{fb();return;}}
+  if(!t&&!a){{fb('無法取得 LINE Token（ID Token 和 Access Token 皆為空）');return;}}
   sessionStorage.removeItem('liff_target');
   var f=document.createElement('form');f.method='POST';f.action='/liff/redirect/'+target;
   if(t){{var i=document.createElement('input');i.type='hidden';i.name='id_token';i.value=t;f.appendChild(i);}}
   if(a){{var i2=document.createElement('input');i2.type='hidden';i2.name='access_token';i2.value=a;f.appendChild(i2);}}
   document.body.appendChild(f);f.submit();
-}}).catch(function(){{fb();}});
+}}).catch(function(e){{fb('LIFF 初始化失敗: '+(e.message||e.code||JSON.stringify(e)));}});
 }})();
 </script></body></html>"""
         return request.make_response(html, headers=[('Content-Type', 'text/html')])
