@@ -92,7 +92,11 @@ class LiffRedirectController(http.Controller):
 
         # 建立或更新 LINE 用戶
         LineUser = request.env['line.user'].sudo()
-        line_user = LineUser.create_or_update_from_liff(payload)
+        try:
+            line_user = LineUser.create_or_update_from_liff(payload)
+        except Exception:
+            _logger.exception('liff_redirect: LINE 用戶建立/更新失敗 uid=%s', line_uid)
+            line_user = None
         if not line_user:
             return None, request.redirect('/web/login?error=user_creation_failed')
 
@@ -303,7 +307,7 @@ liff.init({{liffId:liffId}}).then(function(){{
             return user
         except Exception:
             _logger.exception('建立 portal user 失敗: %s', login)
-            return Users
+            return None
 
     def _get_redirect_url(self, target, kwargs):
         """取得 redirect 目標 URL

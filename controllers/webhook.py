@@ -26,12 +26,15 @@ class LineWebhookController(http.Controller):
                 methods=['POST'], csrf=False, save_session=False)
     def webhook(self, config_id=None, **kwargs):
         """LINE Webhook 主端點（支援 per-config routing）"""
-        # 解析 config
+        # 解析 config（容錯：config_id 不存在時 fallback 到預設）
         Config = request.env['line.liff.config'].sudo()
         if config_id:
             config = Config.browse(config_id)
             if not config.exists() or not config.active:
-                return Response('Invalid config', status=404)
+                _logger.warning(
+                    'Webhook config_id=%s 不存在或已停用，fallback 到預設 config',
+                    config_id)
+                config = Config._get_default_config()
         else:
             config = Config._get_default_config()
 
