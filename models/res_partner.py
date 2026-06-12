@@ -27,6 +27,27 @@ class ResPartner(models.Model):
                 partner.line_user_ids.filtered(lambda lu: lu.is_follower)
             )
 
+    def action_open_line_user(self):
+        """Smart button：開啟此聯絡人的 LINE 用戶表單"""
+        self.ensure_one()
+        line_user = self.line_user_ids[:1]
+        if line_user:
+            return {
+                'type': 'ir.actions.act_window',
+                'res_model': 'line.user',
+                'view_mode': 'form',
+                'res_id': line_user.id,
+                'target': 'current',
+            }
+        # 沒有 LINE 用戶：開 LINE 用戶列表（過濾此聯絡人）
+        return {
+            'type': 'ir.actions.act_window',
+            'res_model': 'line.user',
+            'view_mode': 'list,form',
+            'domain': [('partner_id', '=', self.id)],
+            'target': 'current',
+        }
+
     def push_to_line(self, msg_or_flex):
         """快捷方法：推播 LINE 通知給此聯絡人
 
