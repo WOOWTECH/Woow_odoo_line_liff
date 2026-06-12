@@ -10,32 +10,19 @@
         <field name="inherit_id" ref="base.view_partner_form"/>
         <field name="arch" type="xml">
 
-            <!-- 在按鈕區域加入 LINE 狀態按鈕 -->
+            <!-- LINE smart button（用 LINE 圖示取代打勾） -->
             <xpath expr="//div[@name='button_box']" position="inside">
-                <button class="oe_stat_button" type="action" icon="fa-commenting"
+                <button class="oe_stat_button" type="action"
                         name="%(woow_line_base.action_line_user)d"
-                        context="{'search_default_partner_id': id}">
-                    <field name="has_line_bound" widget="boolean" string="LINE"/>
+                        context="{'search_default_partner_id': id}"
+                        groups="woow_line_base.group_line_manager">
+                    <img src="/woow_line_bridge/static/description/line_icon.png"
+                         width="22" height="22" alt="LINE"
+                         style="opacity:0.7;margin-right:4px;"/>
+                    <span class="o_stat_text" invisible="has_line_bound">未綁定</span>
+                    <span class="o_stat_text" invisible="not has_line_bound">LINE</span>
+                    <field name="has_line_bound" invisible="1"/>
                 </button>
-            </xpath>
-
-            <!-- 在 internal_notes 頁籤後加入 LINE 分頁 -->
-            <xpath expr="//page[@name='internal_notes']" position="after">
-                <page string="LINE 整合" name="line_integration"
-                      groups="woow_line_base.group_line_manager">
-                    <group string="LINE 帳號">
-                        <field name="line_user_ids" nolabel="1">
-                            <list create="0" edit="0">
-                                <field name="display_name"/>
-                                <field name="line_user_id"/>
-                                <field name="is_follower"/>
-                                <field name="notification_enabled" widget="boolean_toggle"/>
-                                <field name="last_login"/>
-                                <field name="push_count"/>
-                            </list>
-                        </field>
-                    </group>
-                </page>
             </xpath>
 
         </field>

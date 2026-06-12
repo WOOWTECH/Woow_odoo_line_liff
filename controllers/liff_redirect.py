@@ -277,9 +277,10 @@ liff.init({{liffId:liffId}}).then(function(){{
                 return partner, user
 
         # 情況 3：建立新 partner + portal user
+        # email 只用於真實信箱，placeholder 不設到 partner（避免佔走 email 欄位）
         partner = Partner.create({
             'name': name,
-            'email': email or f'line_{line_user.line_user_id}@line.placeholder',
+            'email': email or False,
             'image_1920': False,
         })
         line_user.bind_partner(partner.id)
