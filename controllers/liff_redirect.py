@@ -132,7 +132,7 @@ class LiffRedirectController(http.Controller):
     # 路由
     # ------------------------------------------------------------------
 
-    @http.route(['/liff/redirect', '/liff/redirect/<string:target>'], type='http',
+    @http.route(['/liff/redirect', '/liff/redirect/<path:target>'], type='http',
                 auth='none', methods=['GET', 'POST'], website=False, csrf=False)
     def liff_redirect(self, target='book', **kwargs):
         """LIFF 自動登入跳轉端點
@@ -359,6 +359,10 @@ liff.init({{liffId:liffId}}).then(function(){{
                 return f'/my/ext-bookings/{booking_id}'
             except (ValueError, IndexError):
                 pass
+
+        # 支援直接路徑（如 my/orders, my/home, shop 等）
+        if target.startswith(('my/', 'shop', 'appointment/', 'contactus')):
+            return f'/{target}'
 
         # 預設回登入頁
         _logger.warning('liff_redirect: 未知的 target=%s，導回登入頁', target)
