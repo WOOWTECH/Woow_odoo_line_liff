@@ -537,13 +537,14 @@ class LineFlexTemplate(models.AbstractModel):
                 'wrap': True,
                 'margin': 'md',
             })
-        body_contents.append({
-            'type': 'text',
-            'text': shop_name,
-            'color': CLR_LABEL,
-            'size': 'xs',
-            'margin': 'lg',
-        })
+        if shop_name:
+            body_contents.append({
+                'type': 'text',
+                'text': shop_name,
+                'color': CLR_LABEL,
+                'size': 'xs',
+                'margin': 'lg',
+            })
 
         result = {
             'type': 'bubble',
