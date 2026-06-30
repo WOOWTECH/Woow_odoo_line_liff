@@ -106,10 +106,15 @@ class LiffRedirectController(http.Controller):
             return None, request.redirect('/web/login?error=login_failed')
 
         # 建立 session：Odoo 18 authenticate(db, credential_dict)
+        # 注意：auth='none' 下 env.uid=None，OdooBot (uid=1) 可能 active=False，
+        # 直接 .sudo() 會導致 hr 模組的 write override 炸掉（env.user 為空）。
+        # 改用 SUPERUSER 環境操作。
+        from odoo import api, SUPERUSER_ID
         db = request.env.cr.dbname
         temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
         try:
-            user.sudo().write({'password': temp_password})
+            su_env = api.Environment(request.env.cr, SUPERUSER_ID, {'active_test': False})
+            su_env['res.users'].browse(user.id).write({'password': temp_password})
             request.env.cr.flush()
             request.env.cr.commit()
             request.session.authenticate(db, {
