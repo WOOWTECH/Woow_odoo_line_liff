@@ -72,6 +72,52 @@ class LineLiffConfig(models.Model):
             rec.liff_endpoint_news = f'{base_url}/liff/news' if base_url else ''
             rec.liff_endpoint_locations = f'{base_url}/liff/locations' if base_url else ''
 
+    # ── 自動同步到 ir.config_parameter ──
+
+    # line.liff.config 欄位 → ir.config_parameter key 對照表
+    _SYNC_FIELDS = {
+        'messaging_channel_id': 'woow_line_base.messaging_channel_id',
+        'messaging_channel_secret': 'woow_line_base.messaging_channel_secret',
+        'messaging_access_token': 'woow_line_base.messaging_access_token',
+        'login_channel_id': 'woow_line_base.login_channel_id',
+        'login_channel_secret': 'woow_line_base.login_channel_secret',
+        'liff_id_member': 'woow_odoo_line_liff.liff_id_member',
+        'liff_id_news': 'woow_odoo_line_liff.liff_id_news',
+        'liff_id_locations': 'woow_odoo_line_liff.liff_id_locations',
+        'shop_name': 'woow_odoo_line_liff.shop_name',
+        'shop_address': 'woow_odoo_line_liff.shop_address',
+        'shop_phone': 'woow_odoo_line_liff.shop_phone',
+        'shop_latitude': 'woow_odoo_line_liff.shop_latitude',
+        'shop_longitude': 'woow_odoo_line_liff.shop_longitude',
+        'shop_opening_hours': 'woow_odoo_line_liff.shop_opening_hours',
+        'rebook_path': 'woow_odoo_line_liff.rebook_path',
+        'richmenu_contact_text': 'woow_odoo_line_liff.richmenu_contact_text',
+    }
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        records = super().create(vals_list)
+        for rec in records:
+            rec._sync_to_system_params()
+        return records
+
+    def write(self, vals):
+        res = super().write(vals)
+        if any(f in vals for f in self._SYNC_FIELDS):
+            for rec in self:
+                rec._sync_to_system_params()
+        return res
+
+    def _sync_to_system_params(self):
+        """將 config 欄位同步到 ir.config_parameter（line.api.service 讀取來源）"""
+        self.ensure_one()
+        ICP = self.env['ir.config_parameter'].sudo()
+        for field_name, param_key in self._SYNC_FIELDS.items():
+            value = getattr(self, field_name, '') or ''
+            ICP.set_param(param_key, value)
+        _logger.info('LINE config %s: 已同步 %d 個參數到 ir.config_parameter',
+                     self.name, len(self._SYNC_FIELDS))
+
     # ── Helper 方法 ──
 
     def _get_api_credentials(self):
