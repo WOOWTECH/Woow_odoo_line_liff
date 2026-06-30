@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# woow_line_bridge/controllers/__init__.py
+# woow_odoo_line_liff/controllers/__init__.py
 # Controllers 載入順序很重要：
 # 1. webhook（獨立，不依賴其他 controller）
 # 2. liff_redirect（核心自動登入機制）

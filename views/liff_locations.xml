@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- woow_line_bridge/views/liff_locations.xml -->
+<!-- woow_odoo_line_liff/views/liff_locations.xml -->
 <!-- 店家位置 LIFF 頁面（含 Leaflet 地圖整合） -->
 <odoo>
 
     <template id="liff_locations_page" name="LIFF Locations Page">
-        <t t-call="woow_line_bridge.liff_layout">
+        <t t-call="woow_odoo_line_liff.liff_layout">
             <div class="liff-locations">
 
                 <!-- 頂部 -->
@@ -76,7 +76,7 @@
                 </div>
 
             </div>
-            <script src="/woow_line_bridge/static/src/js/liff_locations.js"></script>
+            <script src="/woow_odoo_line_liff/static/src/js/liff_locations.js"></script>
         </t>
     </template>
 

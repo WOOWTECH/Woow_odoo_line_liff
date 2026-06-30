@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# woow_line_bridge/models/line_flex_template.py
+# woow_odoo_line_liff/models/line_flex_template.py
 # LINE Flex Message 模板工廠（AbstractModel）
 # 集中管理所有 Flex Message 版型，方便維護與擴充
 import logging
@@ -48,7 +48,7 @@ class LineFlexTemplate(models.AbstractModel):
     def _get_shop_name(self):
         """取得店家名稱"""
         return self.env['ir.config_parameter'].sudo().get_param(
-            'woow_line_bridge.shop_name', '',
+            'woow_odoo_line_liff.shop_name', '',
         )
 
     def _get_config(self, key, default=''):
@@ -62,7 +62,7 @@ class LineFlexTemplate(models.AbstractModel):
         :param target: redirect target (book, my-bookings, profile, home)
         :return: URL string
         """
-        liff_id = self._get_config('woow_line_bridge.liff_id_member', '')
+        liff_id = self._get_config('woow_odoo_line_liff.liff_id_member', '')
         if liff_id:
             return f'https://liff.line.me/{liff_id}/{target}'
         return f'{self._get_base_url()}/liff/redirect/{target}'
@@ -72,7 +72,7 @@ class LineFlexTemplate(models.AbstractModel):
 
         :param page: 頁面名稱（member / news / locations）
         """
-        key = f'woow_line_bridge.liff_id_{page}'
+        key = f'woow_odoo_line_liff.liff_id_{page}'
         return self.env['ir.config_parameter'].sudo().get_param(key, '')
 
     def _liff_url(self, page):
@@ -388,8 +388,8 @@ class LineFlexTemplate(models.AbstractModel):
         ]
 
         footer_buttons = []
-        shop_lat = self._get_config('woow_line_bridge.shop_latitude')
-        shop_lng = self._get_config('woow_line_bridge.shop_longitude')
+        shop_lat = self._get_config('woow_odoo_line_liff.shop_latitude')
+        shop_lng = self._get_config('woow_odoo_line_liff.shop_longitude')
         if shop_lat and shop_lng:
             footer_buttons.append({
                 'type': 'button',

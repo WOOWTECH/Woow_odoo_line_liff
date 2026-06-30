@@ -1,5 +1,5 @@
 /**
- * woow_line_bridge/static/src/js/liff_locations.js
+ * woow_odoo_line_liff/static/src/js/liff_locations.js
  * 店家位置頁 JavaScript — Leaflet + OpenStreetMap 地圖整合
  */
 (function () {

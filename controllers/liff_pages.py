@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# woow_line_bridge/controllers/liff_pages.py
+# woow_odoo_line_liff/controllers/liff_pages.py
 # 自建 LIFF 頁面 Controller
 # 渲染：最新消息 /liff/news、店家位置 /liff/locations
 import base64
@@ -62,7 +62,7 @@ class LiffPagesController(http.Controller):
     def liff_news(self, **kwargs):
         """最新消息頁（inline HTML，不依賴 website 模板）"""
         ICP = request.env['ir.config_parameter'].sudo()
-        shop_name = ICP.get_param('woow_line_bridge.shop_name', '')
+        shop_name = ICP.get_param('woow_odoo_line_liff.shop_name', '')
 
         news_list = request.env['line.news'].sudo().search([
             ('is_published', '=', True),
@@ -117,12 +117,12 @@ class LiffPagesController(http.Controller):
     def liff_locations(self, **kwargs):
         """店家位置頁（inline HTML，不依賴 website 模板）"""
         ICP = request.env['ir.config_parameter'].sudo()
-        shop_name = ICP.get_param('woow_line_bridge.shop_name', '')
-        shop_address = ICP.get_param('woow_line_bridge.shop_address', '')
-        shop_phone = ICP.get_param('woow_line_bridge.shop_phone', '')
-        shop_lat = ICP.get_param('woow_line_bridge.shop_latitude', '')
-        shop_lng = ICP.get_param('woow_line_bridge.shop_longitude', '')
-        shop_hours = ICP.get_param('woow_line_bridge.shop_opening_hours', '')
+        shop_name = ICP.get_param('woow_odoo_line_liff.shop_name', '')
+        shop_address = ICP.get_param('woow_odoo_line_liff.shop_address', '')
+        shop_phone = ICP.get_param('woow_odoo_line_liff.shop_phone', '')
+        shop_lat = ICP.get_param('woow_odoo_line_liff.shop_latitude', '')
+        shop_lng = ICP.get_param('woow_odoo_line_liff.shop_longitude', '')
+        shop_hours = ICP.get_param('woow_odoo_line_liff.shop_opening_hours', '')
 
         map_html = ''
         if shop_lat and shop_lng:
@@ -162,7 +162,7 @@ class LiffPagesController(http.Controller):
     def liff_debug(self, **kwargs):
         """LIFF 診斷頁面 — 在 LINE 內開啟看 LIFF SDK 狀態"""
         ICP = request.env['ir.config_parameter'].sudo()
-        liff_id = ICP.get_param('woow_line_bridge.liff_id_member', '')
+        liff_id = ICP.get_param('woow_odoo_line_liff.liff_id_member', '')
 
         html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">

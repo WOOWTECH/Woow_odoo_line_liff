@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# woow_line_bridge/models/line_user.py
+# woow_odoo_line_liff/models/line_user.py
 # Bridge 擴充 line.user：加入 Rich Menu 關聯 + 推播快捷方法
 from odoo import fields, models
 

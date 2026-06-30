@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- woow_line_bridge/data/ir_config_parameter.xml -->
+<!-- woow_odoo_line_liff/data/ir_config_parameter.xml -->
 <!-- Bridge 系統參數預設值 -->
 <!-- LINE API 金鑰（login/messaging）由 woow_line_base 管理 -->
 <odoo>
@@ -19,53 +19,53 @@
 
         <!-- LIFF ID -->
         <record id="config_liff_id_member" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.liff_id_member</field>
+            <field name="key">woow_odoo_line_liff.liff_id_member</field>
             <field name="value"></field>
         </record>
         <record id="config_liff_id_news" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.liff_id_news</field>
+            <field name="key">woow_odoo_line_liff.liff_id_news</field>
             <field name="value"></field>
         </record>
         <record id="config_liff_id_locations" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.liff_id_locations</field>
+            <field name="key">woow_odoo_line_liff.liff_id_locations</field>
             <field name="value"></field>
         </record>
 
         <!-- 店家資訊 -->
         <record id="config_shop_name" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.shop_name</field>
+            <field name="key">woow_odoo_line_liff.shop_name</field>
             <field name="value"></field>
         </record>
         <record id="config_shop_address" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.shop_address</field>
+            <field name="key">woow_odoo_line_liff.shop_address</field>
             <field name="value"></field>
         </record>
         <record id="config_shop_phone" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.shop_phone</field>
+            <field name="key">woow_odoo_line_liff.shop_phone</field>
             <field name="value"></field>
         </record>
         <record id="config_shop_latitude" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.shop_latitude</field>
+            <field name="key">woow_odoo_line_liff.shop_latitude</field>
             <field name="value"></field>
         </record>
         <record id="config_shop_longitude" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.shop_longitude</field>
+            <field name="key">woow_odoo_line_liff.shop_longitude</field>
             <field name="value"></field>
         </record>
         <record id="config_shop_opening_hours" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.shop_opening_hours</field>
+            <field name="key">woow_odoo_line_liff.shop_opening_hours</field>
             <field name="value"></field>
         </record>
 
         <!-- 重新預約路徑 -->
         <record id="config_rebook_path" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.rebook_path</field>
+            <field name="key">woow_odoo_line_liff.rebook_path</field>
             <field name="value">/liff/redirect/book</field>
         </record>
 
         <!-- Rich Menu 聯絡回覆文字 -->
         <record id="config_richmenu_contact_text" model="ir.config_parameter">
-            <field name="key">woow_line_bridge.richmenu_contact_text</field>
+            <field name="key">woow_odoo_line_liff.richmenu_contact_text</field>
             <field name="value">歡迎直接傳訊息給我們，將由專人為您服務！</field>
         </record>
 

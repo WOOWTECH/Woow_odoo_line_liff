@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# woow_line_bridge/models/__init__.py
+# woow_odoo_line_liff/models/__init__.py
 # 載入順序：config → factory → template → bridge → user extensions → richmenu → logs → mail hook → partner → settings → news → auto_reply
 from . import line_liff_config
 from . import line_flex_factory

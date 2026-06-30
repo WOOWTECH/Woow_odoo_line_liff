@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# woow_line_bridge/__manifest__.py
+# woow_odoo_line_liff/__manifest__.py
 {
     'name': 'WOOW LINE Bridge',
     'version': '18.0.2.0.0',
@@ -48,8 +48,8 @@
     ],
     'assets': {
         'web.assets_frontend': [
-            'woow_line_bridge/static/src/js/liff_helper.js',
-            'woow_line_bridge/static/src/css/liff.css',
+            'woow_odoo_line_liff/static/src/js/liff_helper.js',
+            'woow_odoo_line_liff/static/src/css/liff.css',
         ],
     },
     'application': True,

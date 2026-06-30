@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# woow_line_bridge/models/line_news.py
+# woow_odoo_line_liff/models/line_news.py
 # 最新消息 Model — 供 LIFF 頁面和 LINE 推播使用
 import logging
 

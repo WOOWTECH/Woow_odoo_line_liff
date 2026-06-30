@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# woow_line_bridge/tests/test_flex_template.py
+# woow_odoo_line_liff/tests/test_flex_template.py
 # Flex Message 模板結構驗證
 from unittest.mock import MagicMock
 
@@ -12,10 +12,10 @@ class TestFlexTemplate(TransactionCase):
         super().setUp()
         self.tmpl = self.env['line.flex.template']
         ICP = self.env['ir.config_parameter'].sudo()
-        ICP.set_param('woow_line_bridge.shop_name', 'Test Studio')
-        ICP.set_param('woow_line_bridge.liff_id_member', '1234-test')
-        ICP.set_param('woow_line_bridge.shop_latitude', '25.0330')
-        ICP.set_param('woow_line_bridge.shop_longitude', '121.5654')
+        ICP.set_param('woow_odoo_line_liff.shop_name', 'Test Studio')
+        ICP.set_param('woow_odoo_line_liff.liff_id_member', '1234-test')
+        ICP.set_param('woow_odoo_line_liff.shop_latitude', '25.0330')
+        ICP.set_param('woow_odoo_line_liff.shop_longitude', '121.5654')
 
     def _validate_bubble(self, flex):
         """驗證基本 bubble 結構"""

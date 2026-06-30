@@ -1,5 +1,5 @@
 /**
- * woow_line_bridge/static/src/js/liff_helper.js
+ * woow_odoo_line_liff/static/src/js/liff_helper.js
  * LIFF 共用輔助函式
  * 提供 LIFF 初始化、ID Token 取得、API 呼叫等工具函式
  */

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- woow_line_bridge/data/line_flex_templates.xml -->
+<!-- woow_odoo_line_liff/data/line_flex_templates.xml -->
 <!-- LINE Flex Message 模板資料（Phase 2 補完更多模板） -->
 <!-- 目前 Flex 模板由 Python code 產生，此檔案預留給未來資料驅動的模板 -->
 <odoo>

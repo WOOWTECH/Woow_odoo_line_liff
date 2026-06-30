@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- woow_line_bridge/data/line_auto_reply_data.xml -->
+<!-- woow_odoo_line_liff/data/line_auto_reply_data.xml -->
 <!-- 關鍵字自動回覆種子資料 -->
 <odoo>
     <data noupdate="1">

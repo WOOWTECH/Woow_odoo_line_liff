@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# woow_line_bridge/controllers/liff_api.py
+# woow_odoo_line_liff/controllers/liff_api.py
 # LIFF AJAX API 端點
 # 提供 LIFF 前端使用的 JSON API
 import json

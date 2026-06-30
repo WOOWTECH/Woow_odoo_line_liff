@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# woow_line_bridge/models/mail_notification_line.py
+# woow_odoo_line_liff/models/mail_notification_line.py
 # Hook mail.notification.create() to auto-push LINE Flex Messages
 # When a notification targets a partner with bound LINE user(s),
 # build a generic Flex from mail.message tracking data and push.

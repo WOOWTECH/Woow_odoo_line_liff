@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# woow_line_bridge/models/line_liff_config.py
+# woow_odoo_line_liff/models/line_liff_config.py
 # LINE LIFF 設定檔 — 多實體架構（類似 POS config）
 import logging
 

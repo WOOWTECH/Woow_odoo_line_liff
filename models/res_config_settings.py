@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# woow_line_bridge/models/res_config_settings.py
+# woow_odoo_line_liff/models/res_config_settings.py
 # LINE Bridge 設定頁 — POS 風格 config 選擇器
 import logging
 

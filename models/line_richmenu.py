@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# woow_line_bridge/models/line_richmenu.py
+# woow_odoo_line_liff/models/line_richmenu.py
 # Rich Menu 管理 — 建立/上傳/綁定/刪除/Tab 切換
 import base64
 import logging
@@ -286,7 +286,7 @@ class LineRichMenuArea(models.Model):
             action['type'] = 'uri'
             path = (val or '').lstrip('/')
             ICP = self.env['ir.config_parameter'].sudo()
-            liff_id = ICP.get_param('woow_line_bridge.liff_id_member', '')
+            liff_id = ICP.get_param('woow_odoo_line_liff.liff_id_member', '')
             if liff_id:
                 action['uri'] = f'https://liff.line.me/{liff_id}/{path}'
             else:

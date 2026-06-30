@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    woow_line_bridge/data/automated_action_template.xml
+    woow_odoo_line_liff/data/automated_action_template.xml
     LINE 通知 Automated Action 範本
 
     此檔案提供「預約」模組的 Automated Action 範本作為參考。
@@ -20,7 +20,7 @@
         本套件提供兩層 LINE 通知機制：
 
         【第一層：通用基本通知（自動）】
-        來源：woow_line_bridge 的 line.bridge hook
+        來源：woow_odoo_line_liff 的 line.bridge hook
         內容：表單名稱、階段變更（舊→新）、通知時間
         按鈕：查看詳情（→ Portal 總覽頁）
         觸發：程式碼自動觸發，不需設定
@@ -87,7 +87,7 @@
                 wd = WEEKDAY_ZH[local_dt.weekday()]
                 date_str = local_dt.strftime('%Y/%m/%d') + ' (' + wd + ')'
                 time_str = local_dt.strftime('%H:%M')
-            shop = env['ir.config_parameter'].sudo().get_param('woow_line_bridge.shop_name', '-')
+            shop = env['ir.config_parameter'].sudo().get_param('woow_odoo_line_liff.shop_name', '-')
             staff = rec.staff_user_id.name if rec.staff_user_id else '-'
             phone = partner.mobile or partner.phone or '-'
             count = str(rec.guest_count) + ' 人' if rec.guest_count else '1 人'
@@ -100,7 +100,7 @@
                 ('人數', count),
                 ('電話', phone),
             ]
-            liff_id = env['ir.config_parameter'].sudo().get_param('woow_line_bridge.liff_id_member', '')
+            liff_id = env['ir.config_parameter'].sudo().get_param('woow_odoo_line_liff.liff_id_member', '')
             book_url = 'https://liff.line.me/' + liff_id + '/book' if liff_id else ''
             factory = env['line.flex.factory']
             flex = factory.build_notification(
@@ -147,7 +147,7 @@
             # if rec.date_deadline:
             #     info_rows.append(('期限', str(rec.date_deadline)))
             info_rows.append(('客戶', partner.name or '-'))
-            liff_id = env['ir.config_parameter'].sudo().get_param('woow_line_bridge.liff_id_member', '')
+            liff_id = env['ir.config_parameter'].sudo().get_param('woow_odoo_line_liff.liff_id_member', '')
             home_url = 'https://liff.line.me/' + liff_id + '/home' if liff_id else ''
             factory = env['line.flex.factory']
             flex = factory.build_notification(

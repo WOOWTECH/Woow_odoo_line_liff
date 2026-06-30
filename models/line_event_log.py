@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# woow_line_bridge/models/line_event_log.py
+# woow_odoo_line_liff/models/line_event_log.py
 # LINE Webhook 事件記錄
 # 純記錄表，不含業務邏輯，用於追蹤與除錯
 import logging

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# woow_line_bridge/models/line_push_log.py
+# woow_odoo_line_liff/models/line_push_log.py
 # LINE 推播記錄
 # 記錄每次推播的內容、狀態碼與回應，用於追蹤與除錯
 import logging

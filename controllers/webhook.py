@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# woow_line_bridge/controllers/webhook.py
+# woow_odoo_line_liff/controllers/webhook.py
 # LINE Webhook 接收端點
 # 接收 LINE Platform 的 Webhook 事件，驗簽後處理
 import json
@@ -348,7 +348,7 @@ class LineWebhookController(http.Controller):
         ICP = request.env['ir.config_parameter'].sudo()
         base_url = ICP.get_param('web.base.url', '')
         rebook_path = (config.rebook_path if config and config.rebook_path
-                        else ICP.get_param('woow_line_bridge.rebook_path', '/liff/redirect/book'))
+                        else ICP.get_param('woow_odoo_line_liff.rebook_path', '/liff/redirect/book'))
         rebook_url = f'{base_url}{rebook_path}'
         request.env['line.api.service'].sudo().reply(reply_token, [{
             'type': 'text',
@@ -362,8 +362,8 @@ class LineWebhookController(http.Controller):
             lat, lng = config.shop_latitude or '', config.shop_longitude or ''
         else:
             ICP = request.env['ir.config_parameter'].sudo()
-            lat = ICP.get_param('woow_line_bridge.shop_latitude', '')
-            lng = ICP.get_param('woow_line_bridge.shop_longitude', '')
+            lat = ICP.get_param('woow_odoo_line_liff.shop_latitude', '')
+            lng = ICP.get_param('woow_odoo_line_liff.shop_longitude', '')
         if lat and lng:
             nav_url = f'https://www.google.com/maps/dir/?api=1&destination={lat},{lng}'
             request.env['line.api.service'].sudo().reply(reply_token, [{
@@ -382,7 +382,7 @@ class LineWebhookController(http.Controller):
                 reply_text = config.richmenu_contact_text
             else:
                 ICP = request.env['ir.config_parameter'].sudo()
-                reply_text = ICP.get_param('woow_line_bridge.richmenu_contact_text', '歡迎直接傳訊息給我們，將由專人為您服務！')
+                reply_text = ICP.get_param('woow_odoo_line_liff.richmenu_contact_text', '歡迎直接傳訊息給我們，將由專人為您服務！')
             request.env['line.api.service'].sudo().reply(reply_token, [{
                 'type': 'text',
                 'text': reply_text,
@@ -460,10 +460,10 @@ class LineWebhookController(http.Controller):
                 else:
                     ICP = request.env['ir.config_parameter'].sudo()
                     ph = {
-                        'shop_name': ICP.get_param('woow_line_bridge.shop_name', ''),
-                        'shop_phone': ICP.get_param('woow_line_bridge.shop_phone', ''),
-                        'shop_address': ICP.get_param('woow_line_bridge.shop_address', ''),
-                        'shop_hours': ICP.get_param('woow_line_bridge.shop_opening_hours', ''),
+                        'shop_name': ICP.get_param('woow_odoo_line_liff.shop_name', ''),
+                        'shop_phone': ICP.get_param('woow_odoo_line_liff.shop_phone', ''),
+                        'shop_address': ICP.get_param('woow_odoo_line_liff.shop_address', ''),
+                        'shop_hours': ICP.get_param('woow_odoo_line_liff.shop_opening_hours', ''),
                     }
                 placeholders = defaultdict(str, ph)
                 try:

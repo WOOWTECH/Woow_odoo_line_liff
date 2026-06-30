@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# woow_line_bridge/controllers/liff_redirect.py
+# woow_odoo_line_liff/controllers/liff_redirect.py
 # ★ LIFF → Portal 自動登入跳轉（整個整合的命脈）
 # 流程：驗證 LINE ID Token → 找到/建立 portal user → session.authenticate → 302 redirect
 import json
@@ -178,7 +178,7 @@ class LiffRedirectController(http.Controller):
         liff_id = config.liff_id_member if config else ''
         if not liff_id:
             ICP = request.env['ir.config_parameter'].sudo()
-            liff_id = ICP.get_param('woow_line_bridge.liff_id_member', '')
+            liff_id = ICP.get_param('woow_odoo_line_liff.liff_id_member', '')
 
         # 直接跳轉對照表（fallback）
         direct_urls = {

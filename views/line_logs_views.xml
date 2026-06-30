@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- woow_line_bridge/views/line_logs_views.xml -->
+<!-- woow_odoo_line_liff/views/line_logs_views.xml -->
 <!-- LINE 事件記錄與推播記錄後台視圖 -->
 <odoo>
 

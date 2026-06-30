@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- woow_line_bridge/views/res_partner_views.xml -->
+<!-- woow_odoo_line_liff/views/res_partner_views.xml -->
 <!-- 擴充 res.partner：LINE 整合分頁 -->
 <odoo>
 

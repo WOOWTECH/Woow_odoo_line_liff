@@ -1,4 +1,4 @@
-# woow_line_bridge/models/line_flex_factory.py
+# woow_odoo_line_liff/models/line_flex_factory.py
 # Generic LINE Flex Message factory — grayscale + semantic status colors
 # Any module can call env['line.flex.factory'].build_notification(...)
 import logging
@@ -295,7 +295,7 @@ class LineFlexFactory(models.AbstractModel):
     def _get_document_url(self, model, res_id):
         """Return portal home URL via LIFF for authenticated access in LINE."""
         liff_id = self.env['ir.config_parameter'].sudo().get_param(
-            'woow_line_bridge.liff_id_member', '') or self.env[
+            'woow_odoo_line_liff.liff_id_member', '') or self.env[
             'ir.config_parameter'].sudo().get_param('woow_line_base.liff_id', '')
         if liff_id:
             return 'https://liff.line.me/%s/home' % liff_id

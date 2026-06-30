@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# woow_line_bridge/tests/test_webhook.py
+# woow_odoo_line_liff/tests/test_webhook.py
 # Webhook controller 單元測試
 import base64
 import hashlib

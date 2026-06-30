@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- woow_line_bridge/views/res_config_settings_views.xml -->
+<!-- woow_odoo_line_liff/views/res_config_settings_views.xml -->
 <!-- 設定頁：POS 風格 config 選擇器 + related 欄位 -->
 <odoo>
 
@@ -10,8 +10,8 @@
         <field name="arch" type="xml">
             <xpath expr="//form" position="inside">
                 <app data-string="LINE Bridge" string="LINE Bridge"
-                     name="woow_line_bridge" data-key="woow_line_bridge"
-                     logo="/woow_line_bridge/static/description/line_icon.png"
+                     name="woow_odoo_line_liff" data-key="woow_odoo_line_liff"
+                     logo="/woow_odoo_line_liff/static/description/line_icon.png"
                      groups="woow_line_base.group_line_manager">
 
                     <!-- POS 風格：設定檔選擇器 -->
@@ -21,7 +21,7 @@
                                 <div class="row mt16">
                                     <field name="line_liff_config_id" class="col-lg-4"/>
                                     <button type="action"
-                                            name="%(woow_line_bridge.action_line_liff_config)d"
+                                            name="%(woow_odoo_line_liff.action_line_liff_config)d"
                                             string="+新增設定檔" class="btn-link col-lg-3"/>
                                 </div>
                             </div>

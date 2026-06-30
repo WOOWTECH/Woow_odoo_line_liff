@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# woow_line_bridge/tests/test_line_service.py
+# woow_odoo_line_liff/tests/test_line_service.py
 # LINE API Service 單元測試（line.api.service 由 woow_line_base 提供）
 import base64
 import hashlib

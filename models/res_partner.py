@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# woow_line_bridge/models/res_partner.py
+# woow_odoo_line_liff/models/res_partner.py
 # Bridge 擴充 res.partner：has_line_bound 計算欄位 + push_to_line 快捷方法
 import logging
 

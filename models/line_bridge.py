@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-# woow_line_bridge/models/line_bridge.py
+# woow_odoo_line_liff/models/line_bridge.py
 # 業務事件 hook 中樞（AbstractModel）
 # 業務模組統一透過 bridge 推 LINE，不直接呼叫 push
 import logging

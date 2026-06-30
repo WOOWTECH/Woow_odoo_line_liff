@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- woow_line_bridge/views/assets.xml -->
+<!-- woow_odoo_line_liff/views/assets.xml -->
 <!-- ★ 偵測 ?liff=1 後注入 LIFF SDK 初始化腳本到 website layout -->
 <!-- 讓既有 portal 頁面在 LINE 內看起來像 App -->
 <odoo>
