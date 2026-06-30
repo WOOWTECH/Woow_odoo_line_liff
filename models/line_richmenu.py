@@ -133,6 +133,25 @@ class LineRichMenu(models.Model):
             },
         }
 
+    def action_reupload_to_line(self):
+        """重新上傳 Rich Menu 到 LINE（刪除舊的 → 建立新的）"""
+        self.ensure_one()
+        api = self.env['line.api.service']
+        # 刪除 LINE 上的舊選單
+        if self.line_richmenu_id:
+            was_default = self.is_default
+            api.richmenu_delete(self.line_richmenu_id)
+            self.write({'state': 'draft', 'line_richmenu_id': False, 'is_default': False})
+            _logger.info('Rich Menu 已刪除舊版: %s', self.line_richmenu_id)
+        else:
+            was_default = False
+        # 重新建立
+        result = self.action_create_on_line()
+        # 如果之前是預設，自動重設為預設
+        if was_default and self.line_richmenu_id:
+            self.action_set_as_default()
+        return result
+
     def action_set_as_default(self):
         """設為所有用戶的預設選單"""
         self.ensure_one()

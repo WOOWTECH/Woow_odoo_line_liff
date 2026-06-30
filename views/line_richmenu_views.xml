@@ -37,6 +37,11 @@
                             string="上傳到 LINE" class="btn-primary"
                             invisible="state != 'draft'"
                             groups="woow_line_base.group_line_manager"/>
+                    <button name="action_reupload_to_line" type="object"
+                            string="重新上傳到 LINE" class="btn-primary"
+                            invisible="state not in ('uploaded', 'active')"
+                            confirm="將刪除 LINE 上的舊選單並重新建立，確定嗎？"
+                            groups="woow_line_base.group_line_manager"/>
                     <button name="action_set_as_default" type="object"
                             string="設為預設" class="btn-primary"
                             invisible="state not in ('uploaded',) or is_default"
