@@ -15,6 +15,7 @@
                 <field name="state" widget="badge"
                        decoration-success="state == 'published'"
                        decoration-info="state == 'draft'"/>
+                <field name="push_method" string="推播方式"/>
                 <field name="line_push_count" string="推播次數"/>
                 <field name="line_last_push" string="最近推播"/>
                 <field name="author_id"/>
@@ -36,7 +37,7 @@
                             class="oe_highlight"
                             invisible="state != 'published'"
                             groups="woow_line_base.group_line_manager"
-                            confirm="確定要推播給所有 LINE 好友嗎？"/>
+                            confirm="確定要推播嗎？"/>
                     <button name="action_draft" string="退回草稿" type="object"
                             invisible="state != 'published'"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,published"/>
@@ -55,13 +56,33 @@
                         <group>
                             <field name="image" widget="image" options="{'size': [256, 256]}"/>
                             <field name="card_url" widget="url"/>
-                            <field name="line_push_count" readonly="1"/>
-                            <field name="line_last_push" readonly="1"/>
                         </group>
                     </group>
                     <notebook>
                         <page string="內容" name="page_content">
                             <field name="body"/>
+                        </page>
+                        <page string="推播設定" name="page_push">
+                            <group>
+                                <group string="推播方式">
+                                    <field name="push_method" widget="radio"/>
+                                </group>
+                                <group string="推播對象" invisible="push_method == 'broadcast'">
+                                    <field name="push_target_ids" widget="many2many_tags"
+                                           placeholder="留空 = 所有追蹤中的用戶"
+                                           options="{'color_field': 'is_follower'}"/>
+                                </group>
+                            </group>
+                            <group string="推播紀錄">
+                                <group>
+                                    <field name="line_push_count" readonly="1"/>
+                                    <field name="line_last_push" readonly="1"/>
+                                </group>
+                                <group>
+                                    <field name="line_last_push_method" readonly="1"/>
+                                    <field name="line_last_push_sent" readonly="1"/>
+                                </group>
+                            </group>
                         </page>
                     </notebook>
                 </sheet>
@@ -86,6 +107,7 @@
                         domain="[('line_push_count', '>', 0)]"/>
                 <group expand="0" string="分組">
                     <filter string="狀態" name="group_state" context="{'group_by': 'state'}"/>
+                    <filter string="推播方式" name="group_method" context="{'group_by': 'push_method'}"/>
                     <filter string="發佈日期" name="group_date" context="{'group_by': 'published_date'}"/>
                     <filter string="作者" name="group_author" context="{'group_by': 'author_id'}"/>
                 </group>
