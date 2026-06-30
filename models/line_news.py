@@ -87,11 +87,28 @@ class LineNews(models.Model):
 
         try:
             flex = self.env['line.flex.template'].build_news_card(self)
-            success = self.env['line.api.service'].broadcast([{
+            messages = [{
                 'type': 'flex',
                 'altText': f'最新消息 - {self.title}',
                 'contents': flex,
-            }])
+            }]
+            api = self.env['line.api.service']
+
+            # 優先用 broadcast，失敗則改用 push 逐一發送
+            success = api.broadcast(messages)
+            sent_count = 0
+            if not success:
+                _logger.info('Broadcast 受限，改用 push 逐一發送: %s', self.title)
+                line_users = self.env['line.user'].sudo().search([
+                    ('is_follower', '=', True),
+                    ('is_blocked', '=', False),
+                    ('notification_enabled', '=', True),
+                ])
+                if line_users:
+                    sent_ids = api.push(line_users, messages)
+                    sent_count = len(sent_ids)
+                    success = sent_count > 0
+
             if not success:
                 return {
                     'type': 'ir.actions.client',
@@ -106,12 +123,15 @@ class LineNews(models.Model):
                 'line_push_count': self.line_push_count + 1,
                 'line_last_push': fields.Datetime.now(),
             })
+            msg = f'已推播給所有 LINE 好友（第 {self.line_push_count} 次）'
+            if sent_count:
+                msg = f'已推播給 {sent_count} 位 LINE 好友（第 {self.line_push_count} 次）'
             return {
                 'type': 'ir.actions.client',
                 'tag': 'display_notification',
                 'params': {
                     'title': 'LINE 推播',
-                    'message': f'已推播給所有 LINE 好友（第 {self.line_push_count} 次）',
+                    'message': msg,
                     'type': 'success',
                     'sticky': False,
                 },
