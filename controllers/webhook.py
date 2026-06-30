@@ -25,32 +25,56 @@ class LineWebhookController(http.Controller):
                 type='http', auth='public',
                 methods=['POST'], csrf=False, save_session=False)
     def webhook(self, config_id=None, **kwargs):
-        """LINE Webhook 主端點（支援 per-config routing）"""
-        # 解析 config（容錯：config_id 不存在時 fallback 到預設）
+        """LINE Webhook 主端點（支援 per-config routing）
+
+        路由解析順序：
+        1. line.liff.config（bridge 模式）
+        2. im_livechat.channel（livechat 獨立模式）
+        3. 全域 fallback
+        """
         Config = request.env['line.liff.config'].sudo()
+        config = None
+        lc_channel = None
+        channel_secret = None
+
+        # 1) 嘗試 line.liff.config
         if config_id:
             config = Config.browse(config_id)
             if not config.exists() or not config.active:
-                _logger.warning(
-                    'Webhook config_id=%s 不存在或已停用，fallback 到預設 config',
-                    config_id)
-                config = Config._get_default_config()
-        else:
+                config = None
+        if not config:
             config = Config._get_default_config()
+
+        if config and config.messaging_channel_secret:
+            channel_secret = config.messaging_channel_secret
+
+        # 2) Fallback: 嘗試 im_livechat.channel（livechat 獨立模式）
+        if not channel_secret and 'im_livechat.channel' in request.env:
+            LivechatChannel = request.env['im_livechat.channel'].sudo()
+            if config_id:
+                lc_channel = LivechatChannel.browse(config_id)
+                if not lc_channel.exists() or not lc_channel.line_enabled:
+                    lc_channel = None
+            if not lc_channel:
+                lc_channel = LivechatChannel.search(
+                    [('line_enabled', '=', True)], limit=1)
+            if lc_channel and lc_channel.line_channel_secret:
+                channel_secret = lc_channel.line_channel_secret
+                _logger.info('Webhook: 使用 LiveChat 頻道 %s 的憑證', lc_channel.name)
 
         body_bytes = request.httprequest.get_data()
         signature = request.httprequest.headers.get('X-Line-Signature', '')
 
-        # 驗證簽章（用 config 的 channel_secret，fallback 到全域）
+        # 驗證簽章
         api_service = request.env['line.api.service'].sudo()
-        if config and config.messaging_channel_secret:
+        if channel_secret:
             if not api_service.verify_webhook_signature(
                     body_bytes, signature,
-                    channel_secret=config.messaging_channel_secret):
-                _logger.warning('Webhook 簽章驗證失敗 (config=%s)', config.id)
+                    channel_secret=channel_secret):
+                _logger.warning('Webhook 簽章驗證失敗')
                 return Response('Invalid signature', status=403)
         elif not api_service.verify_webhook_signature(body_bytes, signature):
-            _logger.warning('Webhook 簽章驗證失敗')
+            _logger.warning('Webhook 簽章驗證失敗（無可用 secret）')
             return Response('Invalid signature', status=403)
 
         # 將 config 存到 request context 供後續 handler 使用
