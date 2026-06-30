@@ -22,10 +22,25 @@ class ResPartner(models.Model):
 
     @api.depends('line_user_ids', 'line_user_ids.is_follower')
     def _compute_has_line_bound(self):
+        # 也檢查 mail.guest 的 line_partner_id（livechat 綁定）
+        has_guest_model = (
+            'mail.guest' in self.env
+            and hasattr(self.env['mail.guest'], 'line_partner_id')
+        )
+        guest_partner_ids = set()
+        if has_guest_model and self.ids:
+            guests = self.env['mail.guest'].sudo().search([
+                ('line_partner_id', 'in', self.ids),
+                ('line_user_id', '!=', False),
+            ])
+            guest_partner_ids = set(guests.mapped('line_partner_id').ids)
+
         for partner in self:
-            partner.has_line_bound = bool(
+            via_line_user = bool(
                 partner.line_user_ids.filtered(lambda lu: lu.is_follower)
             )
+            via_guest = partner.id in guest_partner_ids
+            partner.has_line_bound = via_line_user or via_guest
 
     def action_open_line_user(self):
         """Smart button：開啟此聯絡人的 LINE 用戶表單"""
