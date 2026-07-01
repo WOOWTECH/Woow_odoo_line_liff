@@ -1,7 +1,11 @@
 # -*- coding: utf-8 -*-
 # woow_odoo_line_liff/models/line_user.py
 # Bridge 擴充 line.user：加入 Rich Menu 關聯 + 推播快捷方法
-from odoo import fields, models
+import logging
+
+from odoo import api, fields, models
+
+_logger = logging.getLogger(__name__)
 
 
 class LineUserBridge(models.Model):
@@ -21,6 +25,38 @@ class LineUserBridge(models.Model):
         string='目前 Rich Menu',
         ondelete='set null',
     )
+
+    # ------------------------------------------------------------------
+    # Rich Menu 自動同步到 LINE
+    # ------------------------------------------------------------------
+
+    def write(self, vals):
+        res = super().write(vals)
+        if 'current_richmenu_id' in vals:
+            for rec in self:
+                rec._sync_richmenu_to_line()
+        return res
+
+    def _sync_richmenu_to_line(self):
+        """當 current_richmenu_id 變更時，自動呼叫 LINE API 綁定/解綁"""
+        self.ensure_one()
+        if not self.line_user_id:
+            return
+        api = self.env['line.api.service'].sudo()
+        if self.current_richmenu_id and self.current_richmenu_id.line_richmenu_id:
+            success = api.richmenu_link_to_user(
+                self.current_richmenu_id.line_richmenu_id,
+                self.line_user_id,
+            )
+            if success:
+                _logger.info('Rich Menu 已綁定: %s → %s',
+                             self.display_name, self.current_richmenu_id.name)
+            else:
+                _logger.warning('Rich Menu 綁定失敗: %s', self.display_name)
+        else:
+            # 解除個人綁定 → 回到預設
+            api.richmenu_unlink_from_user(self.line_user_id)
+            _logger.info('Rich Menu 已解除: %s → 回到預設', self.display_name)
 
     # ------------------------------------------------------------------
     # 推播快捷方法（使用 line.api.service）
