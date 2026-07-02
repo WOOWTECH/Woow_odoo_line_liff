@@ -17,6 +17,61 @@
 
 ---
 
+## Quick Start
+
+Get from zero to sending your first LINE message from Odoo in 5 steps:
+
+**Step 1 -- Install modules**
+
+```
+Settings -> Apps -> Update Apps List
+Search and install: woow_line_base, then woow_odoo_line_liff
+```
+
+**Step 2 -- Create a LINE config record**
+
+```
+LINE menu -> Configuration -> LINE Configs -> Create
+```
+
+This creates a `line.liff.config` record that holds all credentials for one LINE Official Account.
+
+**Step 3 -- Fill credentials from LINE Developers Console**
+
+Log into [LINE Developers Console](https://developers.line.biz/) and copy:
+
+| Field in Odoo | Where to find in LINE Console |
+|---------------|-------------------------------|
+| Messaging Channel ID | Messaging API > Channel settings > Basic settings > Channel ID |
+| Messaging Channel Secret | Messaging API > Channel settings > Basic settings > Channel secret |
+| Messaging Access Token | Messaging API > Channel settings > Messaging API > Channel access token (long-lived) |
+| Login Channel ID | LINE Login > Channel settings > Basic settings > Channel ID |
+| Login Channel Secret | LINE Login > Channel settings > Basic settings > Channel secret |
+
+**Step 4 -- Test broadcast from Odoo Shell**
+
+Open Odoo shell (`odoo-bin shell -d <dbname>`) and send a test message:
+
+```python
+config = env['line.liff.config']._get_default_config()
+api = env['line.api.service']
+api.broadcast([{'type': 'text', 'text': 'Hello from Odoo!'}])
+env.cr.commit()
+```
+
+If successful, all followers of your LINE Official Account will receive "Hello from Odoo!".
+
+**Step 5 -- Set up LIFF app for portal auto-login**
+
+1. In LINE Developers Console, create a LIFF app under your LINE Login channel:
+   - Size: `Full`
+   - Endpoint URL: `https://<your-odoo-domain>/liff/redirect`
+2. Copy the LIFF ID (e.g. `1234567890-abcDefGh`) into the `liff_id_member` field of your config record.
+3. In the LINE Developers Console, set the Webhook URL to `https://<your-odoo-domain>/line/webhook/<config_id>` and enable webhook events.
+4. Users who open the LIFF URL from LINE will be auto-logged into the Odoo portal.
+
+---
+
 ## Table of Contents
 
 1. [Architecture Overview](#architecture-overview)
@@ -43,18 +98,22 @@
    - [webhook.py -- LINE Webhook](#webhookpy--line-webhook)
    - [liff_api.py -- AJAX Endpoints](#liff_apipy--ajax-endpoints)
    - [liff_pages.py -- LIFF Pages](#liff_pagespy--liff-pages)
-6. [Static Assets](#static-assets)
-7. [Security](#security)
-8. [Cron Jobs](#cron-jobs)
-9. [Data Files](#data-files)
-10. [Flow Diagrams](#flow-diagrams)
+6. [Webhook Route Conflict & LiveChat Coexistence](#webhook-route-conflict--livechat-coexistence)
+7. [LiveChat Forwarding Edge Cases](#livechat-forwarding-edge-cases)
+8. [Static Assets](#static-assets)
+9. [Security](#security)
+10. [Security Analysis -- Threat Model](#security-analysis--threat-model)
+11. [Cron Jobs](#cron-jobs)
+12. [Data Files](#data-files)
+13. [Flow Diagrams](#flow-diagrams)
     - [LIFF Login Flow](#liff-login-flow)
     - [Rich Menu Lifecycle](#rich-menu-lifecycle)
     - [News Push Flow](#news-push-flow)
     - [Webhook Event Handling](#webhook-event-handling)
     - [Auto-Push Hook Flow](#auto-push-hook-flow)
-11. [Installation & Configuration Checklist](#installation--configuration-checklist)
-12. [For AI Agents](#for-ai-agents)
+14. [Installation & Configuration Checklist](#installation--configuration-checklist)
+15. [Local Development & Testing](#local-development--testing)
+16. [For AI Agents](#for-ai-agents)
 
 ---
 
@@ -863,6 +922,77 @@ Self-contained LIFF pages rendered as inline HTML (no dependency on website temp
 
 ---
 
+## Webhook Route Conflict & LiveChat Coexistence
+
+When both `woow_odoo_line_liff` (this module) and `woow_odoo_livechat_line` are installed, they share the same `/line/webhook/<int:config_id>` URL pattern. This section explains how the conflict is resolved.
+
+### Route Ownership
+
+The **bridge module** (`woow_odoo_line_liff`) owns the webhook route. Its `LineWebhookBridge` controller in `controllers/webhook.py` registers `/line/webhook` and `/line/webhook/<int:config_id>` and handles all incoming webhook events.
+
+The **livechat module** (`woow_odoo_livechat_line`) does **not** register a competing route when the bridge module is installed. Instead, the bridge module forwards events to the livechat module programmatically.
+
+### Forwarding Mechanism
+
+After processing each webhook event (follow, message, postback, etc.), the bridge controller calls its `_forward_to_livechat()` method:
+
+```python
+def _forward_to_livechat(self, event, config=None):
+    try:
+        from odoo.addons.woow_odoo_livechat_line.controllers.webhook import LineWebhookController
+        livechat_ctrl = LineWebhookController()
+        livechat_ctrl._handle_event_from_bridge(event, config)
+    except ImportError:
+        pass  # livechat module not installed -- silently skip
+```
+
+This means:
+- The bridge module **always processes webhook events first** (logging, follow/unfollow, auto-reply, postback handling).
+- The livechat module is invoked **second**, receiving the same event for real-time chat processing.
+- If the livechat module is not installed, the `ImportError` is caught silently and the bridge handles everything standalone.
+
+### Standalone vs. Coexistence Mode
+
+| Mode | Installed Modules | Webhook Behavior |
+|------|-------------------|------------------|
+| **Standalone** | `woow_line_base` + `woow_odoo_line_liff` | Bridge handles all events directly; no forwarding |
+| **Coexistence** | All three modules | Bridge handles events first, then forwards to livechat |
+| **LiveChat only** | `woow_line_base` + `woow_odoo_livechat_line` | LiveChat module registers its own webhook route (no conflict) |
+
+### Configuration
+
+No additional configuration is needed. The bridge module auto-detects whether the livechat module is installed at runtime via the dynamic import. There is no manifest dependency between the two modules.
+
+---
+
+## LiveChat Forwarding Edge Cases
+
+The dynamic import pattern used for livechat forwarding has several edge cases that developers should be aware of.
+
+### ImportError Is Caught Silently
+
+The `_forward_to_livechat()` method wraps the import in `try/except ImportError`. This means:
+- If `woow_odoo_livechat_line` is **uninstalled** while the server is running, forwarding silently stops.
+- If the livechat module has a **broken import** (e.g. missing dependency), the error is swallowed. Check server logs if livechat events are not being processed.
+- To verify forwarding is active, check `line.event.log` for events with `processed=True` and look for corresponding livechat sessions.
+
+### Route Registration Order
+
+Odoo loads controllers in module dependency order. Since `woow_odoo_line_liff` does not depend on `woow_odoo_livechat_line` (and vice versa), their load order is non-deterministic. The bridge module avoids route conflicts by:
+1. Registering the canonical `/line/webhook/<int:config_id>` route in its own controller.
+2. Using dynamic import (not controller inheritance) to invoke the livechat handler.
+
+If both modules independently register the same route pattern, Odoo's routing layer picks the **last loaded** controller. The bridge module's forwarding pattern avoids this ambiguity entirely.
+
+### Error Containment Between Modules
+
+Errors in the livechat handler do **not** propagate back to the bridge webhook response. The forwarding call is wrapped in its own `try/except`:
+- If the livechat handler raises an exception, the bridge still returns HTTP 200 to LINE (as required by the LINE Platform).
+- The error is logged via `_logger.exception()` but does not affect event logging, auto-reply, or postback handling in the bridge module.
+- This isolation ensures that a bug in the livechat module cannot break core webhook processing.
+
+---
+
 ## Static Assets
 
 ### `js/liff_helper.js`
@@ -931,6 +1061,75 @@ Groups are defined in `woow_line_base`:
 - **HMAC-SHA256**: All webhook requests are validated against `X-Line-Signature` using the channel secret
 - **Config validation**: Channel secret is resolved from `line.liff.config` -> `im_livechat.channel` -> global parameter
 - Invalid signatures return HTTP 403
+
+---
+
+## Security Analysis -- Threat Model
+
+This section details specific security risks in the LIFF authentication and webhook flows, along with the mitigations implemented in this module.
+
+### LIFF ID Token Replay Prevention
+
+The LIFF login flow accepts a LINE ID Token (JWT) and verifies it via `POST https://api.line.me/oauth2/v2.1/verify`. The token includes an `exp` (expiration) claim.
+
+**Risk**: A stolen ID Token could be replayed to authenticate as another user until the token expires.
+
+**Mitigations**:
+- The LINE verify endpoint rejects expired tokens (tokens are short-lived, typically 5-10 minutes).
+- The ID Token is submitted via **POST body** (not URL query parameters), reducing exposure in browser history, referrer headers, and server access logs.
+- The LIFF bridge page extracts the token client-side and immediately POSTs it; the token is never persisted in `localStorage` or cookies.
+- After successful authentication, an Odoo session cookie is issued -- the ID Token is not reused for subsequent requests.
+
+**Remaining risk**: Within the token's validity window (before `exp`), a man-in-the-middle on the client device could replay the token. HTTPS mitigates network-level interception.
+
+### Email Claim Binding Attack
+
+When a LINE user authenticates via LIFF, the `_ensure_portal_user()` method attempts to match the LINE user to an existing Odoo partner by email. This creates a potential account takeover vector.
+
+**Risk**: A LINE user who sets their LINE profile email to `admin@company.com` (or any existing partner's email) would be automatically bound to that partner's portal account.
+
+**Mitigations**:
+- The `_ensure_portal_user()` lookup order prioritizes the existing `line_user.partner_id` binding. If the LINE user is already bound, the email match step is skipped entirely.
+- For new LINE users, the email match creates a **binding** between the LINE user and the existing partner but does not grant elevated privileges -- portal users have limited access.
+- Odoo's `group_portal` provides read-only access to the partner's own records. An attacker would see the target's portal data (orders, invoices) but cannot modify backend records.
+
+**Recommendation for high-security deployments**: Override `_ensure_portal_user()` to require manual approval before binding a new LINE user to an existing partner with email match. Add an `email_verified` flag or use LINE's email scope verification status.
+
+### Token Transmission Security
+
+**Risk**: If the ID Token were transmitted as a URL query parameter (e.g. `GET /liff/redirect?id_token=xxx`), it would appear in server access logs, browser history, and potentially in `Referer` headers sent to third-party resources.
+
+**Mitigation**: The LIFF bridge page uses a **hidden form POST** to submit the ID Token:
+```html
+<form method="POST" action="/liff/redirect/{target}">
+    <input type="hidden" name="id_token" value="..." />
+</form>
+```
+POST body data does not appear in URL logs or referrer headers.
+
+### AJAX Endpoint Authentication
+
+The `/api/line/*` endpoints (`liff_api.py`) do not use Odoo's session-based authentication. Instead, each request must include a valid LINE ID Token.
+
+| Endpoint | Auth Method | Token Location |
+|----------|------------|----------------|
+| `/api/line/bind` | ID Token | `Authorization: Bearer <token>` or POST body `id_token` field |
+| `/api/line/me` | ID Token | Same |
+| `/api/line/notification/toggle` | ID Token | Same |
+
+**Risk**: These endpoints use `auth='none'`, meaning Odoo does not enforce session authentication. If the ID Token validation is bypassed (e.g. due to a bug in `line.api.service.verify_id_token()`), the endpoints become unauthenticated.
+
+**Mitigation**: The ID Token is verified on every request via the LINE platform's verify API. The verify call is not cached -- each request triggers a fresh HTTP call to `api.line.me`. This adds latency but ensures tokens cannot be used after expiration.
+
+### Summary of Security Boundaries
+
+| Boundary | Protection | Weakness |
+|----------|-----------|----------|
+| Webhook ingress | HMAC-SHA256 signature | None (standard LINE security) |
+| LIFF token transmission | POST body (not URL) | Token valid until `exp` claim |
+| LIFF token verification | LINE verify API (per-request) | Adds ~100ms latency per call |
+| Email-based partner binding | Lookup order prioritizes existing binding | New users matched by email without verification |
+| AJAX endpoints | ID Token required per request | `auth='none'` bypasses Odoo session layer |
 
 ---
 
@@ -1442,3 +1641,153 @@ The `line.liff.config` model acts as the **single source of truth** for all LINE
 9. **`skip_line_notification` context**: When performing operations from webhook postback handlers (e.g. cancelling a booking), always pass `context={'skip_line_notification': True}` to prevent recursive push loops.
 
 10. **Flex Message `altText`**: LINE requires `altText` for Flex Messages (shown in push notifications and non-supported clients). Always provide meaningful `altText` -- it is the only text visible in notification banners.
+
+---
+
+## Quick Start: Zero to First Message (5 Minutes)
+
+```python
+# 1. Install modules
+#    Apps → search "woow_line_base" → Install
+#    Apps → search "woow_odoo_line_liff" → Install
+
+# 2. Create a LINE config
+#    Settings → LINE → Configuration → Create
+#    Fill: Channel ID, Channel Secret, Access Token (from LINE Developer Console)
+#    Save → the webhook_url field shows your webhook endpoint
+
+# 3. Test in Odoo Shell
+svc = env['line.api.service']
+svc.broadcast([svc.build_text_message('Hello from Odoo!')])
+# All followers receive the message.
+
+# 4. Test via partner
+partner = env['res.partner'].browse(1)
+partner.push_to_line('Hello via partner shortcut!')
+```
+
+---
+
+## Security Analysis
+
+### LIFF Token Verification
+
+- **ID Token replay**: LINE ID tokens include `exp` claim. `verify_id_token()` validates expiry server-side. Expired tokens are rejected with HTTP 400.
+- **Token theft**: ID tokens are sent via POST body (not URL query) to mitigate HTTP referrer leaking. Tokens are short-lived (5 minutes).
+
+### Email Claim & Partner Binding
+
+- If a LINE user has email `admin@company.com` in their LINE profile, `_ensure_portal_user()` binds them to the existing partner with that email.
+- This is **by design** (trusted identity from LINE's verified email).
+- To disable email matching, override `_ensure_portal_user()` to skip the email lookup step.
+
+### AJAX Endpoint Security
+
+- `/api/line/bind`, `/api/line/me`, `/api/line/notification/toggle` all require a valid ID token in the request body.
+- The token is verified server-side on every call — no session-based auth bypass.
+- `action_bind` explicitly prevents specifying arbitrary `partner_id` to prevent account hijacking.
+
+### Webhook Security
+
+- **HMAC-SHA256**: Every incoming webhook is verified against `X-Line-Signature` using the channel secret.
+- **Credential resolution order**: config_id specific → livechat channel fallback → global parameters.
+- Invalid signatures return HTTP 200 (to prevent LINE from retrying) but the event is silently dropped.
+
+---
+
+## Webhook Route Conflict Resolution
+
+When **both** `woow_odoo_line_liff` and `woow_odoo_livechat_line` are installed:
+
+```
+LINE Platform
+    │
+    POST /line/webhook/<int:config_id>
+    │
+    ▼
+woow_odoo_line_liff webhook controller  ← TAKES PRECEDENCE (alphabetical)
+    │
+    ├── Verify signature
+    ├── Process events (follow, unfollow, message, postback)
+    ├── Log to line.event.log
+    │
+    └── _forward_to_livechat(event)  ← DYNAMIC IMPORT
+        │
+        ▼
+    woow_odoo_livechat_line controller (invoked programmatically, NOT via HTTP)
+        │
+        └── Create message in Discuss channel
+```
+
+**Key points:**
+- The livechat module's webhook route is **never called directly via HTTP** when the bridge module is installed.
+- The `config_id` in the URL refers to `line.liff.config.id`, not `im_livechat.channel.id`.
+- If `woow_odoo_livechat_line` is installed standalone (without this module), its webhook uses `im_livechat.channel.id`.
+
+---
+
+## Cross-Module Method Dependencies
+
+| This module calls | woow_line_base method | Context |
+|-------------------|-----------------------|---------|
+| Webhook controller | `verify_webhook_signature()` | Every incoming POST |
+| Webhook controller | `reply()` | Follow welcome, auto-reply |
+| Webhook controller | `get_profile()` | Follow event |
+| Webhook controller | `line.user.create_or_update_from_webhook()` | Follow/message events |
+| LIFF controller | `verify_id_token()` / `verify_access_token()` | LIFF login |
+| LIFF controller | `line.user.create_or_update_from_liff()` | LIFF login |
+| News push | `push()` / `broadcast()` / `multicast()` / `narrowcast()` | News push action |
+| Rich Menu | `richmenu_create/upload/set_default/delete/link_*` | Rich Menu lifecycle |
+| Auto-push hook | `push()` | mail.notification override |
+| Audience sync | `audience_create()` / `audience_delete()` | Tag sync |
+| Insight cron | `get_insight_delivery()` / `get_insight_followers()` | Daily stats |
+| Quota display | `get_quota()` / `get_quota_consumption()` | News form computed field |
+
+---
+
+## Local Development & Testing
+
+### Exposing Local Odoo for Webhook Testing
+
+```bash
+# Option 1: ngrok
+ngrok http 8069
+# Copy HTTPS URL → set as webhook in LINE Console
+
+# Option 2: Cloudflare Tunnel
+cloudflared tunnel --url http://localhost:8069
+
+# Update Odoo system parameter
+Settings → Technical → Parameters → System Parameters
+  web.base.url = https://your-tunnel-url.com
+```
+
+### Running Tests
+
+```bash
+# All tests
+odoo-bin -d testdb -i woow_odoo_line_liff --test-enable --stop-after-init
+
+# Specific test
+odoo-bin -d testdb --test-tags=/woow_odoo_line_liff -k test_flex_template
+
+# With verbose logging
+odoo-bin -d testdb -i woow_odoo_line_liff --test-enable --stop-after-init --log-level=test
+```
+
+---
+
+## Troubleshooting
+
+| Symptom | Cause | Fix |
+|---------|-------|-----|
+| LIFF redirect loops infinitely | `web.base.url` is HTTP | Set to HTTPS in system parameters |
+| LIFF login fails with "Invalid ID token" | Login channel ID mismatch | Verify `login_channel_id` matches the LIFF app's channel |
+| Webhook returns 200 but no events logged | Signature verification failed | Check `messaging_channel_secret` matches LINE Console |
+| Rich Menu image not showing | Image not uploaded after create | Call `action_create_on_line()` — it uploads automatically |
+| Broadcast fails silently | HTTP 429 rate limit | Check `line_last_push_method` — it may have auto-degraded to multicast |
+| News push shows 0 sent | No followers with `is_follower=True` | Check LINE user records; run webhook follow test |
+| Audience sync fails | LINE returns 401 | Re-issue access token in LINE Console |
+| Auto-push not triggering | `auto_line_notify` is False | Enable in Settings → LINE → Configuration |
+| Portal user can't log in with password | LIFF generates random password | By design — users authenticate via LIFF only |
+| Flex Message shows only altText | Client doesn't support Flex | Expected on desktop LINE or old versions |
