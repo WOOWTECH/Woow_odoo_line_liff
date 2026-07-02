@@ -924,17 +924,7 @@ Self-contained LIFF pages rendered as inline HTML (no dependency on website temp
 
 ## Webhook Route Conflict & LiveChat Coexistence
 
-When both `woow_odoo_line_liff` (this module) and `woow_odoo_livechat_line` are installed, they share the same `/line/webhook/<int:config_id>` URL pattern. This section explains how the conflict is resolved.
-
-### Route Ownership
-
-The **bridge module** (`woow_odoo_line_liff`) owns the webhook route. Its `LineWebhookBridge` controller in `controllers/webhook.py` registers `/line/webhook` and `/line/webhook/<int:config_id>` and handles all incoming webhook events.
-
-The **livechat module** (`woow_odoo_livechat_line`) does **not** register a competing route when the bridge module is installed. Instead, the bridge module forwards events to the livechat module programmatically.
-
-### Forwarding Mechanism
-
-After processing each webhook event (follow, message, postback, etc.), the bridge controller calls its `_forward_to_livechat()` method:
+When both `woow_odoo_line_liff` and `woow_odoo_livechat_line` are installed, they share `/line/webhook/<int:config_id>`. The bridge module owns the route and forwards events to livechat via dynamic import:
 
 ```python
 def _forward_to_livechat(self, event, config=None):
@@ -943,53 +933,21 @@ def _forward_to_livechat(self, event, config=None):
         livechat_ctrl = LineWebhookController()
         livechat_ctrl._handle_event_from_bridge(event, config)
     except ImportError:
-        pass  # livechat module not installed -- silently skip
+        pass  # livechat module not installed
 ```
-
-This means:
-- The bridge module **always processes webhook events first** (logging, follow/unfollow, auto-reply, postback handling).
-- The livechat module is invoked **second**, receiving the same event for real-time chat processing.
-- If the livechat module is not installed, the `ImportError` is caught silently and the bridge handles everything standalone.
-
-### Standalone vs. Coexistence Mode
 
 | Mode | Installed Modules | Webhook Behavior |
 |------|-------------------|------------------|
-| **Standalone** | `woow_line_base` + `woow_odoo_line_liff` | Bridge handles all events directly; no forwarding |
-| **Coexistence** | All three modules | Bridge handles events first, then forwards to livechat |
-| **LiveChat only** | `woow_line_base` + `woow_odoo_livechat_line` | LiveChat module registers its own webhook route (no conflict) |
+| **Standalone** | `woow_line_base` + `woow_odoo_line_liff` | Bridge handles all events; no forwarding |
+| **Coexistence** | All three modules | Bridge processes first, then forwards to livechat |
+| **LiveChat only** | `woow_line_base` + `woow_odoo_livechat_line` | LiveChat registers its own route (no conflict) |
 
-### Configuration
+No additional configuration needed — auto-detection at runtime. No manifest dependency between bridge and livechat modules.
 
-No additional configuration is needed. The bridge module auto-detects whether the livechat module is installed at runtime via the dynamic import. There is no manifest dependency between the two modules.
-
----
-
-## LiveChat Forwarding Edge Cases
-
-The dynamic import pattern used for livechat forwarding has several edge cases that developers should be aware of.
-
-### ImportError Is Caught Silently
-
-The `_forward_to_livechat()` method wraps the import in `try/except ImportError`. This means:
-- If `woow_odoo_livechat_line` is **uninstalled** while the server is running, forwarding silently stops.
-- If the livechat module has a **broken import** (e.g. missing dependency), the error is swallowed. Check server logs if livechat events are not being processed.
-- To verify forwarding is active, check `line.event.log` for events with `processed=True` and look for corresponding livechat sessions.
-
-### Route Registration Order
-
-Odoo loads controllers in module dependency order. Since `woow_odoo_line_liff` does not depend on `woow_odoo_livechat_line` (and vice versa), their load order is non-deterministic. The bridge module avoids route conflicts by:
-1. Registering the canonical `/line/webhook/<int:config_id>` route in its own controller.
-2. Using dynamic import (not controller inheritance) to invoke the livechat handler.
-
-If both modules independently register the same route pattern, Odoo's routing layer picks the **last loaded** controller. The bridge module's forwarding pattern avoids this ambiguity entirely.
-
-### Error Containment Between Modules
-
-Errors in the livechat handler do **not** propagate back to the bridge webhook response. The forwarding call is wrapped in its own `try/except`:
-- If the livechat handler raises an exception, the bridge still returns HTTP 200 to LINE (as required by the LINE Platform).
-- The error is logged via `_logger.exception()` but does not affect event logging, auto-reply, or postback handling in the bridge module.
-- This isolation ensures that a bug in the livechat module cannot break core webhook processing.
+**Edge cases:**
+- `ImportError` silently caught if livechat is uninstalled mid-runtime. Check `line.event.log` to verify forwarding.
+- Errors in the livechat handler are contained — bridge always returns HTTP 200 to LINE.
+- Odoo's module load order is non-deterministic for independent modules. The dynamic import pattern avoids route registration ambiguity.
 
 ---
 
@@ -1602,11 +1560,39 @@ This is wrapped in `try/except ImportError` for graceful degradation.
 
 ### Config Sync Mechanism
 
-The `line.liff.config` model acts as the **single source of truth** for all LINE credentials and settings. On every `create()` or `write()` that touches `_SYNC_FIELDS`, values are copied to `ir.config_parameter`. This design allows:
+The `line.liff.config` model acts as the **single source of truth** for all LINE credentials and settings. On every `create()` or `write()` that touches `_SYNC_FIELDS`, values are copied to `ir.config_parameter`:
 
-- `line.api.service` (from `woow_line_base`) to read credentials from system parameters without a hard dependency on this module
-- Multiple configs to coexist (though only one syncs to global parameters at a time)
-- Settings UI to edit config fields via `related` fields
+```
+line.liff.config.write({'messaging_access_token': 'new_token'})
+    │
+    └── _sync_to_system_params()
+        └── for field, param_key in _SYNC_FIELDS.items():
+            └── ir.config_parameter.set_param(param_key, value)
+                e.g. 'woow_line_base.messaging_access_token' = 'new_token'
+```
+
+This design allows `line.api.service` to read credentials from system parameters without depending on this module. Multiple configs can coexist, but only one syncs to global parameters at a time. The Settings UI edits config fields via `related` fields.
+
+### Diagnostic Health Check
+
+```python
+# Verify LINE integration is working (run in Odoo Shell)
+config = env['line.liff.config']._get_default_config()
+svc = env['line.api.service']
+
+# 1. Check config exists
+print(f"Config: {config.name}" if config else "ERROR: No config found")
+
+# 2. Check token is valid
+token = env['ir.config_parameter'].get_param('woow_line_base.messaging_access_token')
+print(f"Token: {'OK (' + token[:10] + '...)' if token else 'MISSING'}")
+
+# 3. Test API connectivity
+import requests
+r = requests.get('https://api.line.me/v2/bot/info',
+    headers={'Authorization': f'Bearer {token}'})
+print(f"API: {r.status_code} - {r.json().get('displayName', r.text[:50])}")
+```
 
 ### Error Handling Patterns
 
