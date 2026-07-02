@@ -57,6 +57,13 @@
                     <field name="current_richmenu_id"/>
                 </group>
             </xpath>
+
+            <!-- 在 LINE 資料 tab 加入分眾標籤 -->
+            <xpath expr="//page[@name='line_data']" position="inside">
+                <separator string="分眾標籤"/>
+                <field name="audience_tag_ids" widget="many2many_tags"
+                       options="{'color_field': 'color'}"/>
+            </xpath>
         </field>
     </record>
 
