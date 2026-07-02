@@ -1644,88 +1644,6 @@ The `line.liff.config` model acts as the **single source of truth** for all LINE
 
 ---
 
-## Quick Start: Zero to First Message (5 Minutes)
-
-```python
-# 1. Install modules
-#    Apps → search "woow_line_base" → Install
-#    Apps → search "woow_odoo_line_liff" → Install
-
-# 2. Create a LINE config
-#    Settings → LINE → Configuration → Create
-#    Fill: Channel ID, Channel Secret, Access Token (from LINE Developer Console)
-#    Save → the webhook_url field shows your webhook endpoint
-
-# 3. Test in Odoo Shell
-svc = env['line.api.service']
-svc.broadcast([svc.build_text_message('Hello from Odoo!')])
-# All followers receive the message.
-
-# 4. Test via partner
-partner = env['res.partner'].browse(1)
-partner.push_to_line('Hello via partner shortcut!')
-```
-
----
-
-## Security Analysis
-
-### LIFF Token Verification
-
-- **ID Token replay**: LINE ID tokens include `exp` claim. `verify_id_token()` validates expiry server-side. Expired tokens are rejected with HTTP 400.
-- **Token theft**: ID tokens are sent via POST body (not URL query) to mitigate HTTP referrer leaking. Tokens are short-lived (5 minutes).
-
-### Email Claim & Partner Binding
-
-- If a LINE user has email `admin@company.com` in their LINE profile, `_ensure_portal_user()` binds them to the existing partner with that email.
-- This is **by design** (trusted identity from LINE's verified email).
-- To disable email matching, override `_ensure_portal_user()` to skip the email lookup step.
-
-### AJAX Endpoint Security
-
-- `/api/line/bind`, `/api/line/me`, `/api/line/notification/toggle` all require a valid ID token in the request body.
-- The token is verified server-side on every call — no session-based auth bypass.
-- `action_bind` explicitly prevents specifying arbitrary `partner_id` to prevent account hijacking.
-
-### Webhook Security
-
-- **HMAC-SHA256**: Every incoming webhook is verified against `X-Line-Signature` using the channel secret.
-- **Credential resolution order**: config_id specific → livechat channel fallback → global parameters.
-- Invalid signatures return HTTP 200 (to prevent LINE from retrying) but the event is silently dropped.
-
----
-
-## Webhook Route Conflict Resolution
-
-When **both** `woow_odoo_line_liff` and `woow_odoo_livechat_line` are installed:
-
-```
-LINE Platform
-    │
-    POST /line/webhook/<int:config_id>
-    │
-    ▼
-woow_odoo_line_liff webhook controller  ← TAKES PRECEDENCE (alphabetical)
-    │
-    ├── Verify signature
-    ├── Process events (follow, unfollow, message, postback)
-    ├── Log to line.event.log
-    │
-    └── _forward_to_livechat(event)  ← DYNAMIC IMPORT
-        │
-        ▼
-    woow_odoo_livechat_line controller (invoked programmatically, NOT via HTTP)
-        │
-        └── Create message in Discuss channel
-```
-
-**Key points:**
-- The livechat module's webhook route is **never called directly via HTTP** when the bridge module is installed.
-- The `config_id` in the URL refers to `line.liff.config.id`, not `im_livechat.channel.id`.
-- If `woow_odoo_livechat_line` is installed standalone (without this module), its webhook uses `im_livechat.channel.id`.
-
----
-
 ## Cross-Module Method Dependencies
 
 | This module calls | woow_line_base method | Context |
@@ -1742,6 +1660,19 @@ woow_odoo_line_liff webhook controller  ← TAKES PRECEDENCE (alphabetical)
 | Audience sync | `audience_create()` / `audience_delete()` | Tag sync |
 | Insight cron | `get_insight_delivery()` / `get_insight_followers()` | Daily stats |
 | Quota display | `get_quota()` / `get_quota_consumption()` | News form computed field |
+
+### Methods Exposed by This Module (for downstream modules)
+
+| Model | Method | Purpose | Used by |
+|-------|--------|---------|---------|
+| `line.bridge` | `notify_partner(partner, msg_or_flex)` | Push notification to a partner's LINE users | Any business module |
+| `line.bridge` | `notify_group(xml_id, msg_or_flex)` | Push to all users in a security group | Any business module |
+| `line.flex.factory` | `build_notification(event_type, title, ...)` | Build a generic Flex Message | Any business module |
+| `line.flex.factory` | `build_tracking_notification(message, partner)` | Build Flex from mail.message tracking | `mail.notification` hook |
+| `line.flex.template` | `build_welcome()`, `build_news_card()`, etc. | Domain-specific Flex templates | Webhook handler, news push |
+| `res.partner` | `push_to_line(msg_or_flex)` | Convenience method on partner | Any business module |
+| `line.liff.config` | `_get_default_config()` | Get the default LINE config | Any module needing credentials |
+| `line.liff.config` | `_get_api_credentials()` | Returns (channel_id, secret, token) | `line.api.service` callers |
 
 ---
 
