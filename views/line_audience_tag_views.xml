@@ -4,7 +4,7 @@
         <field name="name">line.audience.tag.tree</field>
         <field name="model">line.audience.tag</field>
         <field name="arch" type="xml">
-            <list string="分眾標籤" editable="bottom">
+            <list string="分眾標籤">
                 <field name="sequence" widget="handle"/>
                 <field name="name"/>
                 <field name="color" widget="color_picker"/>
@@ -47,7 +47,7 @@
                     <notebook>
                         <page string="用戶" name="users">
                             <field name="user_ids" widget="many2many_tags"
-                                   options="{'color_field': 'color'}"/>
+                                   />
                         </page>
                     </notebook>
                 </sheet>
