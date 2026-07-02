@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="line_insight_log_view_tree" model="ir.ui.view">
+        <field name="name">line.insight.log.tree</field>
+        <field name="model">line.insight.log</field>
+        <field name="arch" type="xml">
+            <list string="LINE 統計紀錄" default_order="date desc">
+                <field name="date"/>
+                <field name="config_id"/>
+                <field name="delivery_total" string="總送達"/>
+                <field name="delivery_broadcast" optional="show"/>
+                <field name="delivery_push" optional="show"/>
+                <field name="delivery_multicast" optional="show"/>
+                <field name="delivery_narrowcast" optional="hide"/>
+                <field name="delivery_reply" optional="hide"/>
+                <field name="followers" string="好友數"/>
+                <field name="targeted_reaches" optional="show"/>
+                <field name="blocks" optional="hide"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="line_insight_log_view_form" model="ir.ui.view">
+        <field name="name">line.insight.log.form</field>
+        <field name="model">line.insight.log</field>
+        <field name="arch" type="xml">
+            <form string="LINE 統計紀錄" create="false">
+                <sheet>
+                    <group>
+                        <group string="基本">
+                            <field name="date"/>
+                            <field name="config_id"/>
+                        </group>
+                        <group string="好友">
+                            <field name="followers"/>
+                            <field name="targeted_reaches"/>
+                            <field name="blocks"/>
+                        </group>
+                    </group>
+                    <group>
+                        <group string="送達統計">
+                            <field name="delivery_total"/>
+                            <field name="delivery_broadcast"/>
+                            <field name="delivery_push"/>
+                            <field name="delivery_multicast"/>
+                            <field name="delivery_narrowcast"/>
+                            <field name="delivery_reply"/>
+                        </group>
+                        <group string="互動統計">
+                            <field name="impressions"/>
+                            <field name="clicks"/>
+                            <field name="click_rate"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="line_insight_log_view_search" model="ir.ui.view">
+        <field name="name">line.insight.log.search</field>
+        <field name="model">line.insight.log</field>
+        <field name="arch" type="xml">
+            <search string="統計紀錄">
+                <field name="date"/>
+                <field name="config_id"/>
+                <filter name="last_7_days" string="近 7 天"
+                        domain="[('date', '>=', (context_today() - datetime.timedelta(days=7)).strftime('%%Y-%%m-%%d'))]"/>
+                <filter name="last_30_days" string="近 30 天"
+                        domain="[('date', '>=', (context_today() - datetime.timedelta(days=30)).strftime('%%Y-%%m-%%d'))]"/>
+                <group string="分組">
+                    <filter string="日期" name="group_date" context="{'group_by': 'date:month'}"/>
+                    <filter string="設定檔" name="group_config" context="{'group_by': 'config_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_line_insight_log" model="ir.actions.act_window">
+        <field name="name">統計紀錄</field>
+        <field name="res_model">line.insight.log</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_last_30_days': 1}</field>
+    </record>
+</odoo>

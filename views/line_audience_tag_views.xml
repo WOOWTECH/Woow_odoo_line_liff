@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="line_audience_tag_view_tree" model="ir.ui.view">
+        <field name="name">line.audience.tag.tree</field>
+        <field name="model">line.audience.tag</field>
+        <field name="arch" type="xml">
+            <list string="分眾標籤" editable="bottom">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="color" widget="color_picker"/>
+                <field name="user_count"/>
+                <field name="line_audience_group_id"/>
+                <field name="config_id"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="line_audience_tag_view_form" model="ir.ui.view">
+        <field name="name">line.audience.tag.form</field>
+        <field name="model">line.audience.tag</field>
+        <field name="arch" type="xml">
+            <form string="分眾標籤">
+                <header>
+                    <button name="action_sync_to_line" type="object"
+                            string="同步到 LINE" class="btn-primary"
+                            groups="woow_line_base.group_line_manager"/>
+                    <button name="action_delete_from_line" type="object"
+                            string="從 LINE 刪除" class="btn-secondary"
+                            invisible="not line_audience_group_id"
+                            groups="woow_line_base.group_line_manager"/>
+                </header>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" placeholder="標籤名稱"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="color" widget="color_picker"/>
+                            <field name="config_id"/>
+                            <field name="description"/>
+                        </group>
+                        <group>
+                            <field name="line_audience_group_id" readonly="1"/>
+                            <field name="user_count"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="用戶" name="users">
+                            <field name="user_ids" widget="many2many_tags"
+                                   options="{'color_field': 'color'}"/>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_line_audience_tag" model="ir.actions.act_window">
+        <field name="name">分眾標籤</field>
+        <field name="res_model">line.audience.tag</field>
+        <field name="view_mode">list,form</field>
+    </record>
+</odoo>

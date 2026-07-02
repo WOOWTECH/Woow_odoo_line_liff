@@ -51,19 +51,47 @@ class LineNews(models.Model):
         ('broadcast', '全員推播 (Broadcast)'),
         ('multicast', '指定推播 (Multicast)'),
         ('push', '個別推播 (Push)'),
+        ('narrowcast', '精準推播 (Narrowcast)'),
     ], string='推播方式', default='broadcast',
         help='Broadcast: 發給所有好友（60次/小時）\n'
              'Multicast: 批量發給指定用戶（200次/秒，每次500人）\n'
-             'Push: 逐一發給指定用戶（200次/秒）')
+             'Push: 逐一發給指定用戶（200次/秒）\n'
+             'Narrowcast: 按分眾標籤精準推播（60次/小時）')
     push_target_ids = fields.Many2many(
         'line.user', string='推播對象',
         domain=[('is_follower', '=', True), ('is_blocked', '=', False)],
         help='Multicast / Push 模式的推播目標。留空則發給所有追蹤中的用戶。')
+    push_audience_tag_ids = fields.Many2many(
+        'line.audience.tag', string='分眾標籤',
+        help='Narrowcast 模式的目標分眾群組')
 
     line_push_count = fields.Integer(string='LINE 推播次數', default=0)
     line_last_push = fields.Datetime(string='最近推播時間', readonly=True)
     line_last_push_method = fields.Char(string='最近推播方式', readonly=True)
     line_last_push_sent = fields.Integer(string='最近送達人數', readonly=True)
+    quota_display = fields.Char(
+        string='配額使用量', compute='_compute_quota_display')
+
+    def _compute_quota_display(self):
+        """即時查詢 LINE 配額"""
+        api = self.env['line.api.service']
+        cache = {}
+        for rec in self:
+            config = rec.config_id
+            if not config:
+                rec.quota_display = ''
+                continue
+            key = config.id
+            if key not in cache:
+                quota = api.get_quota() or {}
+                consumption = api.get_quota_consumption() or {}
+                total = quota.get('value', 0)
+                used = consumption.get('totalUsage', 0)
+                if total:
+                    cache[key] = f'{used} / {total} 則（剩餘 {total - used}）'
+                else:
+                    cache[key] = f'已用 {used} 則（無上限）'
+            rec.quota_display = cache[key]
 
     @api.depends('state')
     def _compute_is_published(self):
@@ -164,6 +192,27 @@ class LineNews(models.Model):
             success = api.multicast(uids, messages)
             self._log_multicast(PushLog, targets, messages, success)
             return success, len(uids) if success else 0, 'multicast'
+
+        # ── Narrowcast（精準推播）──
+        if method == 'narrowcast':
+            recipient = None
+            if self.push_audience_tag_ids:
+                # 確保所有 tag 都已同步到 LINE
+                for tag in self.push_audience_tag_ids:
+                    if not tag.line_audience_group_id:
+                        tag.action_sync_to_line()
+                # 用第一個 tag 的 audience group（LINE narrowcast 一次只能指定一個）
+                synced = self.push_audience_tag_ids.filtered('line_audience_group_id')
+                if synced:
+                    recipient = {
+                        'type': 'audience',
+                        'audienceGroupId': int(synced[0].line_audience_group_id),
+                    }
+            request_id = api.narrowcast(messages, recipient=recipient)
+            if request_id:
+                self._log_broadcast(PushLog, messages, True)
+                return True, 0, 'narrowcast'
+            return False, 0, 'narrowcast'
 
         # ── Push（逐一）──
         sent_ids = api.push(targets, messages)

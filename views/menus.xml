@@ -66,6 +66,20 @@
               action="action_line_push_log"
               sequence="20"/>
 
+    <menuitem id="menu_line_insight_log"
+              name="統計紀錄"
+              parent="menu_line_logs"
+              action="action_line_insight_log"
+              sequence="30"/>
+
+    <!-- 分眾管理 -->
+    <menuitem id="menu_line_audience_tag"
+              name="分眾標籤"
+              parent="menu_line_bridge_root"
+              action="action_line_audience_tag"
+              sequence="12"
+              groups="woow_line_base.group_line_manager"/>
+
     <!-- 設定 -->
     <menuitem id="menu_line_config"
               name="設定"

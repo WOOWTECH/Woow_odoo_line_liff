@@ -67,18 +67,24 @@
                                 <group string="推播方式">
                                     <field name="push_method" widget="radio"/>
                                 </group>
-                                <group string="推播對象" invisible="push_method == 'broadcast'">
+                                <group string="推播對象" invisible="push_method in ('broadcast', 'narrowcast')">
                                     <field name="push_target_ids" widget="many2many_tags"
-                                           placeholder="留空 = 所有追蹤中的用戶"
-                                           options="{'color_field': 'is_follower'}"/>
+                                           placeholder="留空 = 所有追蹤中的用戶"/>
+                                </group>
+                                <group string="分眾標籤" invisible="push_method != 'narrowcast'">
+                                    <field name="push_audience_tag_ids" widget="many2many_tags"
+                                           options="{'color_field': 'color'}"
+                                           placeholder="選擇分眾群組"/>
                                 </group>
                             </group>
-                            <group string="推播紀錄">
+                            <group string="配額 / 推播紀錄">
+                                <group>
+                                    <field name="config_id" string="LINE 官方帳號"/>
+                                    <field name="quota_display" readonly="1" string="本月配額"/>
+                                </group>
                                 <group>
                                     <field name="line_push_count" readonly="1"/>
                                     <field name="line_last_push" readonly="1"/>
-                                </group>
-                                <group>
                                     <field name="line_last_push_method" readonly="1"/>
                                     <field name="line_last_push_sent" readonly="1"/>
                                 </group>

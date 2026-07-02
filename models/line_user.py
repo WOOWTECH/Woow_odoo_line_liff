@@ -19,6 +19,11 @@ class LineUserBridge(models.Model):
         help='此用戶來自的 LINE LIFF 設定檔',
     )
 
+    # 分眾標籤
+    audience_tag_ids = fields.Many2many(
+        'line.audience.tag', 'line_audience_tag_user_rel',
+        'user_id', 'tag_id', string='分眾標籤')
+
     # Rich Menu（richmenu model 從 base 搬到 bridge）
     current_richmenu_id = fields.Many2one(
         'line.richmenu',

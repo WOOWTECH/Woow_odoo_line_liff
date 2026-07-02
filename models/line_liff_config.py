@@ -59,6 +59,12 @@ class LineLiffConfig(models.Model):
     richmenu_contact_text = fields.Text('聯絡回覆文字',
         default='歡迎直接傳訊息給我們，將由專人為您服務！')
 
+    # ── 好友統計（LINE Insight API 同步） ──
+    follower_count = fields.Integer('好友數', readonly=True)
+    target_reach = fields.Integer('可觸及人數', readonly=True)
+    blocked_count = fields.Integer('封鎖數', readonly=True)
+    follower_updated_at = fields.Datetime('統計更新時間', readonly=True)
+
     # ── 計算欄位（URL） ──
     webhook_url = fields.Char('Webhook URL', compute='_compute_urls')
     liff_endpoint_news = fields.Char('最新消息端點', compute='_compute_urls')
