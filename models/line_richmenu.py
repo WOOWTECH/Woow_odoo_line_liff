@@ -134,22 +134,42 @@ class LineRichMenu(models.Model):
         }
 
     def action_reupload_to_line(self):
-        """重新上傳 Rich Menu 到 LINE（刪除舊的 → 建立新的）"""
+        """重新上傳 Rich Menu 到 LINE（刪除舊的 → 建立新的 → 重新綁定用戶）"""
         self.ensure_one()
         api = self.env['line.api.service']
+
+        # 記住之前的狀態
+        was_default = self.is_default
+        # 找出所有綁定此 Rich Menu 的用戶（reupload 後需要重新綁定）
+        linked_users = self.env['line.user'].search([
+            ('current_richmenu_id', '=', self.id),
+            ('is_follower', '=', True),
+            ('line_user_id', '!=', False),
+        ])
+
         # 刪除 LINE 上的舊選單
         if self.line_richmenu_id:
-            was_default = self.is_default
             api.richmenu_delete(self.line_richmenu_id)
             self.write({'state': 'draft', 'line_richmenu_id': False, 'is_default': False})
             _logger.info('Rich Menu 已刪除舊版: %s', self.line_richmenu_id)
-        else:
-            was_default = False
+
         # 重新建立
         result = self.action_create_on_line()
+
         # 如果之前是預設，自動重設為預設
         if was_default and self.line_richmenu_id:
             self.action_set_as_default()
+
+        # 重新綁定所有之前指定的用戶
+        if linked_users and self.line_richmenu_id:
+            uids = linked_users.mapped('line_user_id')
+            for i in range(0, len(uids), 500):
+                batch = uids[i:i + 500]
+                api.richmenu_link_to_users(self.line_richmenu_id, batch)
+            _logger.info(
+                'Rich Menu reupload: 重新綁定 %d 位用戶 → %s',
+                len(uids), self.name)
+
         return result
 
     def action_set_as_default(self):
