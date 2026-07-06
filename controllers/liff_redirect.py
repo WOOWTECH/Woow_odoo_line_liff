@@ -360,10 +360,16 @@ liff.init({{liffId:liffId}}).then(function(){{
             except (ValueError, IndexError):
                 pass
 
-        # 支援直接路徑（如 my/orders, my/home, shop 等）
-        if target.startswith(('my/', 'shop', 'appointment/', 'contactus')):
+        # 支援直接路徑（portal + backend）
+        if target.startswith(('my/', 'shop', 'appointment/', 'contactus',
+                              'odoo/', 'web/', 'mail', 'discuss')):
             return f'/{target}'
 
-        # 預設回登入頁
-        _logger.warning('liff_redirect: 未知的 target=%s，導回登入頁', target)
-        return '/web/login'
+        # 任何其他 / 分隔路徑也允許（避免誤擋合法頁面）
+        if '/' in target and not target.startswith(('http', 'javascript', 'data:')):
+            _logger.info('liff_redirect: 允許自訂路徑 target=%s', target)
+            return f'/{target}'
+
+        # 預設回首頁（不是登入頁，因為 session 已建立）
+        _logger.warning('liff_redirect: 未知的 target=%s，導回首頁', target)
+        return '/odoo'
