@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- woow_odoo_line_liff/views/portal_templates.xml -->
+<!-- Portal 優化：LINE 用戶密碼可留空、個人資料只需 email -->
+<odoo>
+
+    <!-- LINE 用戶的舊密碼欄位移除 required -->
+    <template id="portal_my_security_line"
+              inherit_id="portal.portal_my_security"
+              name="LINE: Security - Skip Old Password">
+        <xpath expr="//input[@name='old']" position="attributes">
+            <attribute name="required"/>
+            <attribute name="placeholder">LINE 用戶可留空</attribute>
+        </xpath>
+    </template>
+
+    <!-- 個人資訊只有 Email 必填 -->
+    <template id="portal_my_details_line"
+              inherit_id="portal.portal_my_details_fields"
+              name="LINE: Details - Only Email Required">
+        <xpath expr="//input[@name='phone']" position="attributes">
+            <attribute name="required"/>
+        </xpath>
+        <xpath expr="//input[@name='street']" position="attributes">
+            <attribute name="required"/>
+        </xpath>
+        <xpath expr="//input[@name='city']" position="attributes">
+            <attribute name="required"/>
+        </xpath>
+        <xpath expr="//select[@name='country_id']" position="attributes">
+            <attribute name="required"/>
+        </xpath>
+    </template>
+
+</odoo>

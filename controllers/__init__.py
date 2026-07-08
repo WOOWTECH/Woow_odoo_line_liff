@@ -5,7 +5,9 @@
 # 2. liff_redirect（核心自動登入機制）
 # 3. liff_pages（自建 LIFF 頁面）
 # 4. liff_api（AJAX 端點）
+# 5. portal（Portal 密碼 + 個人資料優化）
 from . import webhook
 from . import liff_redirect
 from . import liff_pages
 from . import liff_api
+from . import portal
