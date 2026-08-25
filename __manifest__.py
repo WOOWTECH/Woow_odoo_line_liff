@@ -2,7 +2,7 @@
 # woow_odoo_line_liff/__manifest__.py
 {
     'name': 'WOOW LINE Bridge',
-    'version': '18.0.3.1.0',
+    'version': '18.0.3.2.0',
     'category': 'Marketing',
     'summary': 'LINE LIFF 整合層：通知、Rich Menu、LIFF 跳轉',
     'description': """
@@ -56,6 +56,7 @@
             'woow_odoo_line_liff/static/src/css/liff.css',
         ],
     },
+    'post_init_hook': '_fix_empty_login',
     'application': True,
     'installable': True,
     'auto_install': False,
