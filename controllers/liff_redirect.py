@@ -45,12 +45,23 @@ class LiffRedirectController(http.Controller):
     # 共用認證邏輯（DRY：從 liff_redirect + liff_redirect_booking 提取）
     # ------------------------------------------------------------------
 
-    def _authenticate_liff_user(self, **kwargs):
+    def _get_liff_id(self):
+        """讀取 LIFF ID：先看 line.liff.config 再 fallback 到 ir_config_parameter"""
+        Config = request.env['line.liff.config'].sudo()
+        config = Config._get_default_config()
+        if config and config.liff_id_member:
+            return config.liff_id_member
+        return request.env['ir.config_parameter'].sudo().get_param(
+            'woow_odoo_line_liff.liff_id_member', ''
+        )
+
+    def _authenticate_liff_user(self, target='book', **kwargs):
         """驗證 LIFF token 並建立 Odoo session
 
         從 POST body 或 kwargs 取得 id_token/access_token，
         驗證後建立/更新 LINE 用戶、確保 portal user、authenticate session。
 
+        :param target: LIFF target 名稱，用於 token 過期時 refresh 回同一個 target
         :return: (user, None) on success, (None, redirect_response) on failure
         """
         # 取得 token
@@ -83,8 +94,31 @@ class LiffRedirectController(http.Controller):
                 _logger.debug('liff_redirect: Access Token 驗證成功（備援）')
 
         if not payload:
-            _logger.warning('liff_redirect: 所有 token 驗證失敗')
-            return None, request.redirect('/web/login?error=invalid_token')
+            _logger.warning('liff_redirect: 所有 token 驗證失敗（多半是快取的 ID Token 過期）')
+            # 不要 302 到 /web/login，改成回一小段 HTML 讓 LIFF 重新 login 拿 fresh token
+            html = (
+                '<!DOCTYPE html><html><head><meta charset="utf-8">'
+                '<meta name="viewport" content="width=device-width,initial-scale=1">'
+                '<title>Refreshing...</title>'
+                '<style>body{display:flex;align-items:center;justify-content:center;min-height:100vh;background:#F5F5F5;margin:0;font-family:sans-serif}'
+                '.s{width:40px;height:40px;border:4px solid #E5E5E5;border-top-color:#333;border-radius:50%;animation:r .8s linear infinite;margin:0 auto 16px}'
+                '@keyframes r{to{transform:rotate(360deg)}}</style></head>'
+                '<body><div style="text-align:center"><div class="s"></div>'
+                '<p style="color:#666;font-size:14px">重新驗證中...</p></div>'
+                '<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>'
+                '<script>'
+                '(function(){'
+                'var liffId=__LIFFID__;var target=__TARGET__;'
+                "if(typeof liff==='undefined'||!liffId){window.location.href='/web/login?error=invalid_token';return;}"
+                'liff.init({liffId:liffId}).then(function(){'
+                'try{liff.logout();}catch(e){}'
+                "liff.login({redirectUri:window.location.origin+'/liff/redirect/'+target});"
+                "}).catch(function(){window.location.href='/web/login?error=invalid_token';});"
+                '})();'
+                '</script></body></html>'
+            )
+            html = html.replace('__LIFFID__', json.dumps(self._get_liff_id())).replace('__TARGET__', json.dumps(target))
+            return None, request.make_response(html, headers=[('Content-Type', 'text/html; charset=utf-8')])
 
         line_uid = payload.get('sub')
         if not line_uid:
@@ -105,25 +139,28 @@ class LiffRedirectController(http.Controller):
         if not user:
             return None, request.redirect('/web/login?error=login_failed')
 
-        # 建立 session：Odoo 18 authenticate(db, credential_dict)
-        # 注意：auth='none' 下 env.uid=None，OdooBot (uid=1) 可能 active=False，
-        # 直接 .sudo() 會導致 hr 模組的 write override 炸掉（env.user 為空）。
-        # 改用 SUPERUSER 環境操作。
+        # Passwordless session：直接寫 session 狀態，跳過 res.users._check_credentials
+        # 之前用 temp-password + authenticate 的做法在多 worker + ORM cache 場景下
+        # 會偶發 AccessDenied（rewrite 的 hash 尚未反映到 authenticate 讀到的 cursor）。
         from odoo import api, SUPERUSER_ID
-        db = request.env.cr.dbname
-        temp_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
         try:
-            su_env = api.Environment(request.env.cr, SUPERUSER_ID, {'active_test': False})
-            su_env['res.users'].browse(user.id).write({'password': temp_password})
-            request.env.cr.flush()
+            # 讀出目標 user 需要的資料（用 SUPERUSER，因為 auth='none' 下 env.uid 為 None）
+            su_env = api.Environment(request.env.cr, SUPERUSER_ID, {})
+            fresh_user = su_env['res.users'].browse(user.id)
+            if not fresh_user.exists() or not fresh_user.active:
+                raise Exception('user missing or inactive')
+            # 直接設 session state，並用 res.users._compute_session_token 產生合法 token
+            request.session.uid = fresh_user.id
+            request.session.login = fresh_user.login
+            request.session.session_token = fresh_user._compute_session_token(request.session.sid)
+            request.session.pre_login = fresh_user.login
+            request.session.pre_uid = fresh_user.id
+            # 更新 last login 紀錄（authenticate() 原本會做）
+            # 用 SUPERUSER env 直接 create，帶上 create_uid 讓 login_date related 正確
+            su_env['res.users.log'].create({'create_uid': fresh_user.id})
             request.env.cr.commit()
-            request.session.authenticate(db, {
-                'login': user.login,
-                'password': temp_password,
-                'type': 'password',
-            })
         except Exception:
-            _logger.exception('liff_redirect: session.authenticate 失敗')
+            _logger.exception('liff_redirect: passwordless session 建立失敗')
             return None, request.redirect('/web/login?error=login_failed')
 
         return user, None
@@ -143,7 +180,7 @@ class LiffRedirectController(http.Controller):
         if request.httprequest.method == 'GET':
             return self._render_liff_bridge_page(target)
 
-        user, error = self._authenticate_liff_user(**kwargs)
+        user, error = self._authenticate_liff_user(target=target, **kwargs)
         if error:
             return error
 
@@ -162,7 +199,7 @@ class LiffRedirectController(http.Controller):
         if request.httprequest.method == 'GET':
             return self._render_liff_bridge_page(f'booking/{booking_id}')
 
-        user, error = self._authenticate_liff_user(**kwargs)
+        user, error = self._authenticate_liff_user(target=f'booking/{booking_id}', **kwargs)
         if error:
             return error
 
@@ -177,7 +214,23 @@ class LiffRedirectController(http.Controller):
         """渲染 LIFF 中間頁（取得 ID Token 用）
 
         使用 auth='none' 所以不能用 request.render()，直接回 HTML。
+        Fast path: 若 Odoo session cookie 仍有效，直接 302 到目標，跳過 LIFF login。
         """
+        # ---- Fast path：既有 Odoo session 仍有效就直接放行 ----
+        try:
+            if request.session and request.session.uid:
+                from odoo import api, SUPERUSER_ID
+                su_env = api.Environment(request.env.cr, SUPERUSER_ID, {})
+                u = su_env['res.users'].browse(request.session.uid)
+                if u.exists() and u.active:
+                    expected = u._compute_session_token(request.session.sid)
+                    if expected and expected == request.session.session_token:
+                        target_url = self._get_redirect_url(target, {})
+                        _logger.info('liff bridge fast-path: uid=%s → %s', u.id, target_url)
+                        return request.redirect(target_url)
+        except Exception:
+            _logger.exception('liff bridge fast-path 檢查失敗（fallback 到 LIFF 流程）')
+
         Config = request.env['line.liff.config'].sudo()
         config = Config._get_default_config()
         liff_id = config.liff_id_member if config else ''
@@ -267,7 +320,8 @@ liff.init({{liffId:liffId}}).then(function(){{
             if user:
                 return partner, user
             # partner 存在但沒有 user，建立 portal user
-            user = self._create_portal_user(partner, email)
+            # 用 _safe_login 保底：email 為空時 fallback 到 line_<uid>@line.placeholder
+            user = self._create_portal_user(partner, self._safe_login(line_user, email))
             return partner, user
 
         # 情況 2：用 email 查現有 partner
@@ -278,7 +332,7 @@ liff.init({{liffId:liffId}}).then(function(){{
                 user = Users.search([('partner_id', '=', partner.id)], limit=1)
                 if user:
                     return partner, user
-                user = self._create_portal_user(partner, email)
+                user = self._create_portal_user(partner, self._safe_login(line_user, email))
                 return partner, user
 
         # 情況 3：建立新 partner + portal user
@@ -290,9 +344,16 @@ liff.init({{liffId:liffId}}).then(function(){{
         })
         line_user.bind_partner(partner.id)
 
-        login_email = email or f'line_{line_user.line_user_id}@line.placeholder'
-        user = self._create_portal_user(partner, login_email)
+        user = self._create_portal_user(partner, self._safe_login(line_user, email))
         return partner, user
+
+    def _safe_login(self, line_user, email):
+        """Login 永不為空：優先 email，退回 line_<uid>@line.placeholder。
+
+        搭配 __init__.py 的 _fix_empty_login post_init：post_init 補歷史資料，
+        _safe_login 防未來所有 code path。
+        """
+        return (email or '').strip() or f'line_{line_user.line_user_id}@line.placeholder'
 
     def _create_portal_user(self, partner, login):
         """建立 portal user
