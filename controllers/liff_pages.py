@@ -45,7 +45,7 @@ class LiffPagesController(http.Controller):
         from odoo.tools.image import image_process
 
         news = request.env['line.news'].sudo().browse(news_id)
-        if not news.exists() or not news.image:
+        if not news.exists() or news.state != 'published' or not news.image:
             return request.not_found()
         # Binary field 回傳 base64，先解碼為 raw bytes
         raw = base64.b64decode(news.image)
@@ -65,7 +65,7 @@ class LiffPagesController(http.Controller):
         shop_name = ICP.get_param('woow_odoo_line_liff.shop_name', '')
 
         news_list = request.env['line.news'].sudo().search([
-            ('is_published', '=', True),
+            ('state', '=', 'published'),
         ], order='published_date desc', limit=20)
 
         article_id = kwargs.get('article_id')
@@ -73,7 +73,7 @@ class LiffPagesController(http.Controller):
         if article_id:
             try:
                 a = request.env['line.news'].sudo().browse(int(article_id))
-                if a.exists() and a.is_published:
+                if a.exists() and a.state == 'published':
                     article = a
             except (ValueError, TypeError):
                 pass
