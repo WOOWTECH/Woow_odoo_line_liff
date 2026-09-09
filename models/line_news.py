@@ -5,6 +5,7 @@ import json
 import logging
 
 from odoo import api, fields, models
+from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
@@ -97,6 +98,15 @@ class LineNews(models.Model):
     def _compute_is_published(self):
         for rec in self:
             rec.is_published = rec.state == 'published'
+
+    @api.constrains('push_method', 'push_audience_tag_ids')
+    def _check_narrowcast_requires_tags(self):
+        """B-6：narrowcast 沒有指定分眾標籤時，LINE 規格是 recipient 與 filter
+        皆省略 = 發給該帳號全部好友，等同變相 broadcast。存檔階段就擋掉，
+        不要等到按下推播才發現。"""
+        for rec in self:
+            if rec.push_method == 'narrowcast' and not rec.push_audience_tag_ids:
+                raise UserError('精準推播 (Narrowcast) 必須至少指定一個分眾標籤。')
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -208,6 +218,14 @@ class LineNews(models.Model):
                         'type': 'audience',
                         'audienceGroupId': int(synced[0].line_audience_group_id),
                     }
+            if recipient is None:
+                # B-6: LINE 規格中 recipient（與 filter）皆省略 = 發給該帳號全部好友。
+                # 標籤沒同步成功（action_sync_to_line 失敗，或本來就沒指定）時
+                # 絕不可以送出，否則會在「精準推播」的外衣下變成全員群發。
+                _logger.warning(
+                    'Narrowcast 無有效 recipient（分眾標籤未同步或未指定），'
+                    '已中止推播避免變相全員推播: %s', self.title)
+                return False, 0, 'narrowcast'
             request_id = api.narrowcast(messages, recipient=recipient)
             if request_id:
                 self._log_broadcast(PushLog, messages, True)
