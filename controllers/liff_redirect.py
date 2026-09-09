@@ -316,8 +316,8 @@ class LiffRedirectController(http.Controller):
 <script>
 (function(){{
 var serverTarget={_json_for_script(target)};
-var fallbacks={json.dumps(direct_urls)};
-var liffId={json.dumps(liff_id)};
+var fallbacks={_json_for_script(direct_urls)};
+var liffId={_json_for_script(liff_id)};
 var $st=document.getElementById('st');
 var $er=document.getElementById('er');
 var $sp=document.getElementById('sp');
