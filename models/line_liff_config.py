@@ -4,6 +4,7 @@
 import logging
 
 from odoo import api, fields, models
+from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
@@ -108,6 +109,19 @@ class LineLiffConfig(models.Model):
     # B-4: falsy 值一律 skip 的規則，對 Boolean 欄位不適用 —
     # 這裡列出的欄位在同步時永遠寫入（包含 False），見 _sync_to_system_params。
     _SYNC_BOOLEAN_FIELDS = {'auto_line_notify'}
+
+    @api.constrains('active')
+    def _check_single_active_config(self):
+        """B-5：送訊層目前完全走全域參數（非 per-config），同時存在兩筆啟用中的
+        設定檔會讓其中一個 LINE 官方帳號的憑證被另一個靜默覆寫。多門市/多帳號架構
+        是設計層工作，這裡先加護欄擋住最危險的情況。"""
+        for rec in self:
+            if not rec.active:
+                continue
+            if self.search_count([('active', '=', True), ('id', '!=', rec.id)]):
+                raise UserError(
+                    '本版本僅支援單一 LINE 官方帳號：已存在另一筆啟用中的 LINE 設定檔，'
+                    '請先停用/刪除舊設定檔，再啟用這一筆。')
 
     @api.model_create_multi
     def create(self, vals_list):
