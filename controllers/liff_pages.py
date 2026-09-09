@@ -3,7 +3,10 @@
 # 自建 LIFF 頁面 Controller
 # 渲染：最新消息 /liff/news、店家位置 /liff/locations
 import base64
+import json
 import logging
+
+from markupsafe import escape
 
 from odoo import http
 from odoo.http import request
@@ -80,11 +83,13 @@ class LiffPagesController(http.Controller):
 
         cards_html = ''
         if article:
-            body = article.body or article.summary or ''
+            # body 是 sanitize=True 的 Html 欄位，Odoo 存檔時已清消，這裡刻意
+            # 不 escape（否則使用者在後台排的版會被雙重編碼成一堆 &lt;p&gt;）。
+            body = article.body or escape(article.summary or '')
             cards_html = f'''
             <div style="padding:16px;">
                 <a href="/liff/news" style="color:#666;text-decoration:none;">&larr; 返回列表</a>
-                <h2 style="margin:16px 0 8px;color:#1A1A1A;">{article.title or ""}</h2>
+                <h2 style="margin:16px 0 8px;color:#1A1A1A;">{escape(article.title or "")}</h2>
                 <p style="color:#999;font-size:12px;">{str(article.published_date or "")[:10]}</p>
                 <div style="color:#333;line-height:1.8;margin-top:16px;">{body}</div>
             </div>'''
@@ -94,9 +99,9 @@ class LiffPagesController(http.Controller):
                 date = str(n.published_date or '')[:10]
                 items.append(f'''
                 <a href="/liff/news?article_id={n.id}" style="display:block;padding:16px;border-bottom:1px solid #E5E5E5;text-decoration:none;color:#333;">
-                    <div style="font-weight:bold;margin-bottom:4px;">{n.title or ""}</div>
+                    <div style="font-weight:bold;margin-bottom:4px;">{escape(n.title or "")}</div>
                     <div style="color:#999;font-size:12px;">{date}</div>
-                    {f'<div style="color:#666;font-size:13px;margin-top:4px;">{n.summary}</div>' if n.summary else ''}
+                    {f'<div style="color:#666;font-size:13px;margin-top:4px;">{escape(n.summary)}</div>' if n.summary else ''}
                 </a>''')
             cards_html = ''.join(items)
         else:
@@ -104,11 +109,11 @@ class LiffPagesController(http.Controller):
 
         html = f'''<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>最新消息 | {shop_name}</title>
+<title>最新消息 | {escape(shop_name)}</title>
 <style>body{{margin:0;font-family:'Noto Sans TC',sans-serif;background:#F5F5F5;color:#333;}}
 .hdr{{background:#1A1A1A;color:#fff;padding:16px 20px;font-size:16px;font-weight:bold;}}</style>
 </head><body>
-<div class="hdr">{shop_name} — 最新消息</div>
+<div class="hdr">{escape(shop_name)} — 最新消息</div>
 <div style="background:#fff;max-width:600px;margin:0 auto;">{cards_html}</div>
 </body></html>'''
         return request.make_response(html, headers=[('Content-Type', 'text/html')])
@@ -126,6 +131,9 @@ class LiffPagesController(http.Controller):
 
         map_html = ''
         if shop_lat and shop_lng:
+            # json.dumps() 安全序列化成 JS 字串常值（處理引號/反斜線），
+            # 再把 </ 斷開避免內容含 </script> 提前關閉整個 <script> 區塊。
+            shop_name_js = json.dumps(shop_name).replace('</', '<\\/')
             map_html = f'''
             <div id="map" style="height:300px;background:#E5E5E5;"></div>
             <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -133,13 +141,13 @@ class LiffPagesController(http.Controller):
             <script>
             var m=L.map('map').setView([{shop_lat},{shop_lng}],16);
             L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png',{{maxZoom:19}}).addTo(m);
-            L.marker([{shop_lat},{shop_lng}]).addTo(m).bindPopup('{shop_name}').openPopup();
+            L.marker([{shop_lat},{shop_lng}]).addTo(m).bindPopup({shop_name_js}).openPopup();
             </script>'''
         nav_url = f'https://www.google.com/maps/dir/?api=1&destination={shop_lat},{shop_lng}' if shop_lat and shop_lng else '#'
 
         html = f'''<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>店家位置 | {shop_name}</title>
+<title>店家位置 | {escape(shop_name)}</title>
 <style>body{{margin:0;font-family:'Noto Sans TC',sans-serif;background:#F5F5F5;color:#333;}}
 .hdr{{background:#1A1A1A;color:#fff;padding:16px 20px;font-size:16px;font-weight:bold;}}
 .info{{padding:16px 20px;background:#fff;margin:8px 0;}}
@@ -147,14 +155,14 @@ class LiffPagesController(http.Controller):
 .label{{color:#999;width:80px;flex-shrink:0;}} .val{{color:#333;}}
 .btn{{display:block;text-align:center;background:#333;color:#fff;padding:12px;margin:16px 20px;text-decoration:none;border-radius:4px;}}</style>
 </head><body>
-<div class="hdr">{shop_name} — 店家位置</div>
+<div class="hdr">{escape(shop_name)} — 店家位置</div>
 {map_html}
 <div class="info">
-    <div class="row"><span class="label">地址</span><span class="val">{shop_address or '-'}</span></div>
-    <div class="row"><span class="label">電話</span><span class="val">{shop_phone or '-'}</span></div>
-    <div class="row"><span class="label">營業時間</span><span class="val">{shop_hours or '-'}</span></div>
+    <div class="row"><span class="label">地址</span><span class="val">{escape(shop_address) if shop_address else '-'}</span></div>
+    <div class="row"><span class="label">電話</span><span class="val">{escape(shop_phone) if shop_phone else '-'}</span></div>
+    <div class="row"><span class="label">營業時間</span><span class="val">{escape(shop_hours) if shop_hours else '-'}</span></div>
 </div>
-<a class="btn" href="{nav_url}">Google 地圖導航</a>
+<a class="btn" href="{escape(nav_url)}">Google 地圖導航</a>
 </body></html>'''
         return request.make_response(html, headers=[('Content-Type', 'text/html')])
 
