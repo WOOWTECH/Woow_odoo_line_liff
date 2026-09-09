@@ -51,15 +51,20 @@ class LiffRedirectController(http.Controller):
     6. 302 redirect 到目標 URL，附加 ?liff=1
 
     支援的 target：
-    - book → /appointment/1/schedule
+    - book → line.liff.config.rebook_path（未設定時安全預設 /my/home；
+      不同客戶有沒有裝預約模組、預約模組的實際路徑都不一樣，寫死
+      /appointment/1/schedule 在沒裝該模組的實例上一律 404）
     - my-bookings → /my/ext-bookings
     - profile → /my/account
     - booking/<id> → /my/ext-bookings/<id>
+
+    REDIRECT_TARGETS 是這個對照表唯一的真相來源；_render_liff_bridge_page
+    的前端 fallback 表也是從這裡複製，不要再另外維護一份。
     """
 
-    # 目標 URL 對照表
+    # 目標 URL 對照表（唯一真相來源，見上方 docstring）
     REDIRECT_TARGETS = {
-        'book': '/appointment/1/schedule',
+        'book': '/my/home',
         'my-bookings': '/my/ext-bookings',
         'profile': '/my/account',
         'home': '/my/home',
@@ -289,15 +294,13 @@ class LiffRedirectController(http.Controller):
             ICP = request.env['ir.config_parameter'].sudo()
             liff_id = ICP.get_param('woow_odoo_line_liff.liff_id_member', '')
 
-        # 直接跳轉對照表（fallback）
-        direct_urls = {
-            'book': '/appointment/1/schedule',
-            'my-bookings': '/my/ext-bookings',
-            'profile': '/my/account',
-            'home': '/my/home',
-            'orders': '/my/orders',
-            'invoices': '/my/invoices',
-        }
+        # 直接跳轉對照表（fallback）：複製 REDIRECT_TARGETS（唯一真相來源），
+        # 不要在這裡另外維護一份容易跟主表兜不起來的複本。'book' 再用
+        # line.liff.config.rebook_path 覆寫（跟 _get_redirect_url 一致）。
+        direct_urls = dict(self.REDIRECT_TARGETS)
+        custom_book = self._get_custom_book_path()
+        if custom_book:
+            direct_urls['book'] = custom_book
 
         html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -325,7 +328,7 @@ else{{var saved=sessionStorage.getItem('liff_target');if(saved){{target=saved;}}
 function fb(reason){{
   sessionStorage.removeItem('liff_target');
   if(reason){{showErr(reason);return;}}
-  var u=fallbacks[target]||'/appointment/1/schedule';window.location.href=u;
+  var u=fallbacks[target]||'/my/home';window.location.href=u;
 }}
 if(!liffId){{fb('LIFF ID 未設定');return;}}
 if(typeof liff==='undefined'){{fb('LIFF SDK 載入失敗');return;}}
@@ -501,6 +504,24 @@ liff.init({{liffId:liffId}}).then(function(){{
             _logger.exception('建立 portal user 失敗: %s', login)
             return None
 
+    def _get_custom_book_path(self):
+        """讀取 line.liff.config.rebook_path 作為 'book' 的自訂目標。
+
+        新·2：rebook_path 欄位的預設值是 /liff/redirect/book——如果照單全收，
+        對還沒手動改過設定的客戶會造成無限重導（book → /liff/redirect/book
+        → 這個 controller 自己 → target='book' → 又是同一個 rebook_path），
+        所以把「以 /liff/redirect 開頭」視同未設定，回傳 None 讓呼叫端退回
+        REDIRECT_TARGETS['book'] 的安全預設值。
+
+        :return: 自訂路徑字串，或 None（代表沒有可用的自訂值）
+        """
+        Config = request.env['line.liff.config'].sudo()
+        config = Config._get_default_config()
+        path = (config.rebook_path or '').strip() if config else ''
+        if path and not path.startswith('/liff/redirect'):
+            return path
+        return None
+
     def _get_redirect_url(self, target, kwargs):
         """取得 redirect 目標 URL
 
@@ -508,6 +529,13 @@ liff.init({{liffId:liffId}}).then(function(){{
         :param kwargs: 額外參數
         :return: URL 字串
         """
+        # 'book' 可由 line.liff.config.rebook_path 覆寫，取不到才用
+        # REDIRECT_TARGETS 裡的安全預設值（/my/home）。
+        if target == 'book':
+            custom_book = self._get_custom_book_path()
+            if custom_book:
+                return custom_book
+
         # 先查對照表
         url = self.REDIRECT_TARGETS.get(target)
         if url:
