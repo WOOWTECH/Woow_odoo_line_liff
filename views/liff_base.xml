@@ -33,11 +33,24 @@
                     var liffId = '<t t-esc="liff_id"/>';
                     var target = '<t t-esc="target"/>';
 
+                    // 新·2：跟 controllers/liff_redirect.py 的
+                    // LiffRedirectController.REDIRECT_TARGETS 保持一致，
+                    // 那才是唯一真相來源。這裡是靜態 QWeb 模板，沒有管道
+                    // 在 render 當下讀到 line.liff.config.rebook_path，
+                    // book 只能先用跟 REDIRECT_TARGETS 一樣的安全預設值；
+                    // 若這個模板實際上有在使用，需要讓渲染它的 controller
+                    // 把 rebook_path 解析後的值透過 render context 傳進來
+                    // （目前在我負責的三個檔案裡找不到任何地方呼叫
+                    // woow_odoo_line_liff.liff_redirect_bridge 這個模板，
+                    // 已在 FIXES.md 註記，需要確認這份模板是否還在使用）。
                     // 直接跳轉對照表（fallback）
                     var DIRECT_URLS = {
-                        'book': '/appointment/1/schedule',
+                        'book': '/my/home',
                         'my-bookings': '/my/ext-bookings',
-                        'profile': '/my/account'
+                        'profile': '/my/account',
+                        'home': '/my/home',
+                        'orders': '/my/orders',
+                        'invoices': '/my/invoices'
                     };
 
                     function setStatus(text) {
@@ -60,7 +73,7 @@
 
                     function fallback() {
                         // 無法取得 token，直接跳轉目標頁面
-                        var url = DIRECT_URLS[target] || '/appointment/1/schedule';
+                        var url = DIRECT_URLS[target] || '/my/home';
                         setStatus('正在跳轉...');
                         window.location.href = url;
                     }

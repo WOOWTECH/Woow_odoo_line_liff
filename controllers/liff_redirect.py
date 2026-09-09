@@ -4,13 +4,39 @@
 # 流程：驗證 LINE ID Token → 找到/建立 portal user → session.authenticate → 302 redirect
 import json
 import logging
+import re
 import secrets
 import string
+import time
 
 from odoo import http, SUPERUSER_ID
 from odoo.http import request
 
 _logger = logging.getLogger(__name__)
+
+# B-2：只接受安全字元的 target，避免任意字串（含 <script> breakout payload）
+# 被當成合法 target 一路帶進 inline <script>。
+_SAFE_TARGET_RE = re.compile(r'^[A-Za-z0-9_/-]{1,64}$')
+
+# B-2：這兩個 LIFF 中間頁都會把 target 這類外部可控字串內嵌進 inline <script>，
+# 補一個保守但不影響既有 liff.line-scdn.net SDK 運作的 CSP 當第三層防線。
+_LIFF_BRIDGE_CSP = (
+    "default-src 'self' https:; "
+    "script-src 'self' 'unsafe-inline' https://static.line-scdn.net https:; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: https:; "
+    "object-src 'none'; "
+    "base-uri 'none'; "
+    "frame-ancestors 'none'"
+)
+
+
+def _json_for_script(value):
+    """json.dumps() 但跳脫 <, >，避免內嵌進 inline <script> 時被
+    ``</script>`` 提前結束（B-2 反射型 XSS）。json.dumps 本身不會跳脫
+    HTML 特殊字元，直接插值進 <script> 是不安全的。
+    """
+    return json.dumps(value).replace('<', '\\u003c').replace('>', '\\u003e')
 
 
 class LiffRedirectController(http.Controller):
@@ -25,15 +51,20 @@ class LiffRedirectController(http.Controller):
     6. 302 redirect 到目標 URL，附加 ?liff=1
 
     支援的 target：
-    - book → /appointment/1/schedule
+    - book → line.liff.config.rebook_path（未設定時安全預設 /my/home；
+      不同客戶有沒有裝預約模組、預約模組的實際路徑都不一樣，寫死
+      /appointment/1/schedule 在沒裝該模組的實例上一律 404）
     - my-bookings → /my/ext-bookings
     - profile → /my/account
     - booking/<id> → /my/ext-bookings/<id>
+
+    REDIRECT_TARGETS 是這個對照表唯一的真相來源；_render_liff_bridge_page
+    的前端 fallback 表也是從這裡複製，不要再另外維護一份。
     """
 
-    # 目標 URL 對照表
+    # 目標 URL 對照表（唯一真相來源，見上方 docstring）
     REDIRECT_TARGETS = {
-        'book': '/appointment/1/schedule',
+        'book': '/my/home',
         'my-bookings': '/my/ext-bookings',
         'profile': '/my/account',
         'home': '/my/home',
@@ -54,6 +85,15 @@ class LiffRedirectController(http.Controller):
         return request.env['ir.config_parameter'].sudo().get_param(
             'woow_odoo_line_liff.liff_id_member', ''
         )
+
+    def _sanitize_target(self, target):
+        """B-2：白名單過濾 target。不合法就退回預設值 'book'，不原樣回吐——
+        這兩個中間頁會把 target 內嵌進 inline <script>，任何不在安全字元集
+        內的字串都不應該被接受，即使後面還有跳脫處理。
+        """
+        if target and _SAFE_TARGET_RE.match(target):
+            return target
+        return 'book'
 
     def _authenticate_liff_user(self, target='book', **kwargs):
         """驗證 LIFF token 並建立 Odoo session
@@ -117,8 +157,14 @@ class LiffRedirectController(http.Controller):
                 '})();'
                 '</script></body></html>'
             )
-            html = html.replace('__LIFFID__', json.dumps(self._get_liff_id())).replace('__TARGET__', json.dumps(target))
-            return None, request.make_response(html, headers=[('Content-Type', 'text/html; charset=utf-8')])
+            safe_target = self._sanitize_target(target)
+            html = html.replace(
+                '__LIFFID__', _json_for_script(self._get_liff_id())
+            ).replace('__TARGET__', _json_for_script(safe_target))
+            return None, request.make_response(html, headers=[
+                ('Content-Type', 'text/html; charset=utf-8'),
+                ('Content-Security-Policy', _LIFF_BRIDGE_CSP),
+            ])
 
         line_uid = payload.get('sub')
         if not line_uid:
@@ -155,6 +201,11 @@ class LiffRedirectController(http.Controller):
             request.session.session_token = fresh_user._compute_session_token(request.session.sid)
             request.session.pre_login = fresh_user.login
             request.session.pre_uid = fresh_user.id
+            # B-3b：記錄這次 session 是「剛透過 LIFF 免密碼登入」建立的，
+            # 時間戳給 portal.py 的 _is_line_user() 判斷是否在有效期內
+            # （目前設 15 分鐘），避免免密碼 session 被無限期拿來跳過
+            # 改密碼的舊密碼檢查、或連帶改掉 login。
+            request.session.liff_authenticated_at = time.time()
             # 更新 last login 紀錄（authenticate() 原本會做）
             # 用 SUPERUSER env 直接 create，帶上 create_uid 讓 login_date related 正確
             su_env['res.users.log'].create({'create_uid': fresh_user.id})
@@ -217,6 +268,8 @@ class LiffRedirectController(http.Controller):
         Fast path: 若 Odoo session cookie 仍有效，直接 302 到目標，跳過 LIFF login。
         """
         # ---- Fast path：既有 Odoo session 仍有效就直接放行 ----
+        # 用原始 target（跟 POST 成功後的 _get_redirect_url 一致），這裡只是
+        # 302 的 Location，不會被內嵌進 HTML，不需要收窄到 B-2 的白名單。
         try:
             if request.session and request.session.uid:
                 from odoo import api, SUPERUSER_ID
@@ -231,6 +284,9 @@ class LiffRedirectController(http.Controller):
         except Exception:
             _logger.exception('liff bridge fast-path 檢查失敗（fallback 到 LIFF 流程）')
 
+        # B-2：從這裡開始 target 會被內嵌進下面的 inline <script>，先過白名單。
+        target = self._sanitize_target(target)
+
         Config = request.env['line.liff.config'].sudo()
         config = Config._get_default_config()
         liff_id = config.liff_id_member if config else ''
@@ -238,15 +294,13 @@ class LiffRedirectController(http.Controller):
             ICP = request.env['ir.config_parameter'].sudo()
             liff_id = ICP.get_param('woow_odoo_line_liff.liff_id_member', '')
 
-        # 直接跳轉對照表（fallback）
-        direct_urls = {
-            'book': '/appointment/1/schedule',
-            'my-bookings': '/my/ext-bookings',
-            'profile': '/my/account',
-            'home': '/my/home',
-            'orders': '/my/orders',
-            'invoices': '/my/invoices',
-        }
+        # 直接跳轉對照表（fallback）：複製 REDIRECT_TARGETS（唯一真相來源），
+        # 不要在這裡另外維護一份容易跟主表兜不起來的複本。'book' 再用
+        # line.liff.config.rebook_path 覆寫（跟 _get_redirect_url 一致）。
+        direct_urls = dict(self.REDIRECT_TARGETS)
+        custom_book = self._get_custom_book_path()
+        if custom_book:
+            direct_urls['book'] = custom_book
 
         html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -261,9 +315,9 @@ class LiffRedirectController(http.Controller):
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
 (function(){{
-var serverTarget={json.dumps(target)};
-var fallbacks={json.dumps(direct_urls)};
-var liffId={json.dumps(liff_id)};
+var serverTarget={_json_for_script(target)};
+var fallbacks={_json_for_script(direct_urls)};
+var liffId={_json_for_script(liff_id)};
 var $st=document.getElementById('st');
 var $er=document.getElementById('er');
 var $sp=document.getElementById('sp');
@@ -274,7 +328,7 @@ else{{var saved=sessionStorage.getItem('liff_target');if(saved){{target=saved;}}
 function fb(reason){{
   sessionStorage.removeItem('liff_target');
   if(reason){{showErr(reason);return;}}
-  var u=fallbacks[target]||'/appointment/1/schedule';window.location.href=u;
+  var u=fallbacks[target]||'/my/home';window.location.href=u;
 }}
 if(!liffId){{fb('LIFF ID 未設定');return;}}
 if(typeof liff==='undefined'){{fb('LIFF SDK 載入失敗');return;}}
@@ -293,7 +347,42 @@ liff.init({{liffId:liffId}}).then(function(){{
 }}).catch(function(e){{fb('LIFF 初始化失敗: '+(e.message||e.code||JSON.stringify(e)));}});
 }})();
 </script></body></html>"""
-        return request.make_response(html, headers=[('Content-Type', 'text/html')])
+        return request.make_response(html, headers=[
+            ('Content-Type', 'text/html'),
+            ('Content-Security-Policy', _LIFF_BRIDGE_CSP),
+        ])
+
+    def _find_portal_user_for_partner(self, partner):
+        """依 partner 找對應的 share portal user（B-3：免密碼登入守門）。
+
+        如果這個 partner 已經被一個「非 share」的內部使用者佔用（例如
+        partner 剛好是某位員工），絕對不能默默忽略、另外幫他建一個 portal
+        user 就算了事——這裡必須明確拒絕整個登入，讓呼叫端把使用者導去
+        /web/login，而不是悄悄降級。
+
+        :return: (user, blocked) — user 是找到的 share=True res.users
+                 recordset（可能是空 recordset），blocked=True 代表撞到
+                 內部使用者、呼叫端必須直接拒絕登入。
+        """
+        Users = request.env['res.users'].sudo()
+        user = Users.search([
+            ('partner_id', '=', partner.id), ('share', '=', True),
+        ], limit=1)
+        if user:
+            return user, False
+
+        internal_user = Users.search([
+            ('partner_id', '=', partner.id), ('share', '=', False),
+        ], limit=1)
+        if internal_user:
+            _logger.warning(
+                'liff_redirect: partner %s(id=%s) 已綁定非 share 的內部使用者 '
+                '%s(id=%s)，拒絕透過 LIFF 建立免密碼 session（B-3 帳號接管防護）',
+                partner.name, partner.id, internal_user.login, internal_user.id,
+            )
+            return Users.browse(), True
+
+        return Users.browse(), False
 
     def _ensure_portal_user(self, line_user, id_token_payload):
         """確保 LINE 用戶有對應的 portal user
@@ -305,10 +394,9 @@ liff.init({{liffId:liffId}}).then(function(){{
 
         :param line_user: line.user record
         :param id_token_payload: LINE verify API 回傳的 payload
-        :return: (partner, user) tuple
+        :return: (partner, user) tuple；user 為 falsy 代表登入應被拒絕
         """
         Partner = request.env['res.partner'].sudo()
-        Users = request.env['res.users'].sudo()
 
         email = id_token_payload.get('email', '') or line_user.email or ''
         name = id_token_payload.get('name', '') or line_user.display_name or 'LINE User'
@@ -316,7 +404,9 @@ liff.init({{liffId:liffId}}).then(function(){{
         # 情況 1：line_user 已綁定 partner
         if line_user.partner_id:
             partner = line_user.partner_id
-            user = Users.search([('partner_id', '=', partner.id)], limit=1)
+            user, blocked = self._find_portal_user_for_partner(partner)
+            if blocked:
+                return partner, None
             if user:
                 return partner, user
             # partner 存在但沒有 user，建立 portal user
@@ -329,7 +419,9 @@ liff.init({{liffId:liffId}}).then(function(){{
             partner = Partner.search([('email', '=', email)], limit=1)
             if partner:
                 line_user.bind_partner(partner.id)
-                user = Users.search([('partner_id', '=', partner.id)], limit=1)
+                user, blocked = self._find_portal_user_for_partner(partner)
+                if blocked:
+                    return partner, None
                 if user:
                     return partner, user
                 user = self._create_portal_user(partner, self._safe_login(line_user, email))
@@ -369,10 +461,21 @@ liff.init({{liffId:liffId}}).then(function(){{
         env = api.Environment(request.env.cr, SUPERUSER_ID, {})
         Users = env['res.users']
 
-        # 檢查是否已有 user
+        # 檢查是否已有 user；只有「share 且屬於同一個 partner」才可以直接
+        # 重用——login 字串剛好相同不代表可以把 session 發給它，那可能是
+        # 完全無關的帳號、甚至是內部（非 share）帳號（B-3：帳號接管防護）。
+        # 撞到這種情況就改用 placeholder login 另建，不重用既有帳號。
         existing = Users.search([('login', '=', login)], limit=1)
         if existing:
-            return existing
+            if existing.share and existing.partner_id.id == partner.id:
+                return existing
+            _logger.warning(
+                'liff_redirect: login %s 已被%s帳號 %s(id=%s, partner=%s) 使用，'
+                '改用 placeholder login 另建，避免把 session 發給無關帳號（B-3）',
+                login, '非 share (內部)' if not existing.share else '其他 partner 的',
+                existing.login, existing.id, existing.partner_id.id,
+            )
+            login = f'line_p{partner.id}_{secrets.token_hex(6)}@line.placeholder'
 
         # 產生隨機密碼（用戶不需要用密碼登入，都是透過 LIFF）
         password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
@@ -401,6 +504,24 @@ liff.init({{liffId:liffId}}).then(function(){{
             _logger.exception('建立 portal user 失敗: %s', login)
             return None
 
+    def _get_custom_book_path(self):
+        """讀取 line.liff.config.rebook_path 作為 'book' 的自訂目標。
+
+        新·2：rebook_path 欄位的預設值是 /liff/redirect/book——如果照單全收，
+        對還沒手動改過設定的客戶會造成無限重導（book → /liff/redirect/book
+        → 這個 controller 自己 → target='book' → 又是同一個 rebook_path），
+        所以把「以 /liff/redirect 開頭」視同未設定，回傳 None 讓呼叫端退回
+        REDIRECT_TARGETS['book'] 的安全預設值。
+
+        :return: 自訂路徑字串，或 None（代表沒有可用的自訂值）
+        """
+        Config = request.env['line.liff.config'].sudo()
+        config = Config._get_default_config()
+        path = (config.rebook_path or '').strip() if config else ''
+        if path and not path.startswith('/liff/redirect'):
+            return path
+        return None
+
     def _get_redirect_url(self, target, kwargs):
         """取得 redirect 目標 URL
 
@@ -408,6 +529,13 @@ liff.init({{liffId:liffId}}).then(function(){{
         :param kwargs: 額外參數
         :return: URL 字串
         """
+        # 'book' 可由 line.liff.config.rebook_path 覆寫，取不到才用
+        # REDIRECT_TARGETS 裡的安全預設值（/my/home）。
+        if target == 'book':
+            custom_book = self._get_custom_book_path()
+            if custom_book:
+                return custom_book
+
         # 先查對照表
         url = self.REDIRECT_TARGETS.get(target)
         if url:
