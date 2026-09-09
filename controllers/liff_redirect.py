@@ -7,6 +7,7 @@ import logging
 import re
 import secrets
 import string
+import time
 
 from odoo import http, SUPERUSER_ID
 from odoo.http import request
@@ -195,6 +196,11 @@ class LiffRedirectController(http.Controller):
             request.session.session_token = fresh_user._compute_session_token(request.session.sid)
             request.session.pre_login = fresh_user.login
             request.session.pre_uid = fresh_user.id
+            # B-3b：記錄這次 session 是「剛透過 LIFF 免密碼登入」建立的，
+            # 時間戳給 portal.py 的 _is_line_user() 判斷是否在有效期內
+            # （目前設 15 分鐘），避免免密碼 session 被無限期拿來跳過
+            # 改密碼的舊密碼檢查、或連帶改掉 login。
+            request.session.liff_authenticated_at = time.time()
             # 更新 last login 紀錄（authenticate() 原本會做）
             # 用 SUPERUSER env 直接 create，帶上 create_uid 讓 login_date related 正確
             su_env['res.users.log'].create({'create_uid': fresh_user.id})
