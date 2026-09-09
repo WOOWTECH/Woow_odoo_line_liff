@@ -343,6 +343,38 @@ liff.init({{liffId:liffId}}).then(function(){{
             ('Content-Security-Policy', _LIFF_BRIDGE_CSP),
         ])
 
+    def _find_portal_user_for_partner(self, partner):
+        """依 partner 找對應的 share portal user（B-3：免密碼登入守門）。
+
+        如果這個 partner 已經被一個「非 share」的內部使用者佔用（例如
+        partner 剛好是某位員工），絕對不能默默忽略、另外幫他建一個 portal
+        user 就算了事——這裡必須明確拒絕整個登入，讓呼叫端把使用者導去
+        /web/login，而不是悄悄降級。
+
+        :return: (user, blocked) — user 是找到的 share=True res.users
+                 recordset（可能是空 recordset），blocked=True 代表撞到
+                 內部使用者、呼叫端必須直接拒絕登入。
+        """
+        Users = request.env['res.users'].sudo()
+        user = Users.search([
+            ('partner_id', '=', partner.id), ('share', '=', True),
+        ], limit=1)
+        if user:
+            return user, False
+
+        internal_user = Users.search([
+            ('partner_id', '=', partner.id), ('share', '=', False),
+        ], limit=1)
+        if internal_user:
+            _logger.warning(
+                'liff_redirect: partner %s(id=%s) 已綁定非 share 的內部使用者 '
+                '%s(id=%s)，拒絕透過 LIFF 建立免密碼 session（B-3 帳號接管防護）',
+                partner.name, partner.id, internal_user.login, internal_user.id,
+            )
+            return Users.browse(), True
+
+        return Users.browse(), False
+
     def _ensure_portal_user(self, line_user, id_token_payload):
         """確保 LINE 用戶有對應的 portal user
 
@@ -353,10 +385,9 @@ liff.init({{liffId:liffId}}).then(function(){{
 
         :param line_user: line.user record
         :param id_token_payload: LINE verify API 回傳的 payload
-        :return: (partner, user) tuple
+        :return: (partner, user) tuple；user 為 falsy 代表登入應被拒絕
         """
         Partner = request.env['res.partner'].sudo()
-        Users = request.env['res.users'].sudo()
 
         email = id_token_payload.get('email', '') or line_user.email or ''
         name = id_token_payload.get('name', '') or line_user.display_name or 'LINE User'
@@ -364,7 +395,9 @@ liff.init({{liffId:liffId}}).then(function(){{
         # 情況 1：line_user 已綁定 partner
         if line_user.partner_id:
             partner = line_user.partner_id
-            user = Users.search([('partner_id', '=', partner.id)], limit=1)
+            user, blocked = self._find_portal_user_for_partner(partner)
+            if blocked:
+                return partner, None
             if user:
                 return partner, user
             # partner 存在但沒有 user，建立 portal user
@@ -377,7 +410,9 @@ liff.init({{liffId:liffId}}).then(function(){{
             partner = Partner.search([('email', '=', email)], limit=1)
             if partner:
                 line_user.bind_partner(partner.id)
-                user = Users.search([('partner_id', '=', partner.id)], limit=1)
+                user, blocked = self._find_portal_user_for_partner(partner)
+                if blocked:
+                    return partner, None
                 if user:
                     return partner, user
                 user = self._create_portal_user(partner, self._safe_login(line_user, email))
@@ -417,10 +452,21 @@ liff.init({{liffId:liffId}}).then(function(){{
         env = api.Environment(request.env.cr, SUPERUSER_ID, {})
         Users = env['res.users']
 
-        # 檢查是否已有 user
+        # 檢查是否已有 user；只有「share 且屬於同一個 partner」才可以直接
+        # 重用——login 字串剛好相同不代表可以把 session 發給它，那可能是
+        # 完全無關的帳號、甚至是內部（非 share）帳號（B-3：帳號接管防護）。
+        # 撞到這種情況就改用 placeholder login 另建，不重用既有帳號。
         existing = Users.search([('login', '=', login)], limit=1)
         if existing:
-            return existing
+            if existing.share and existing.partner_id.id == partner.id:
+                return existing
+            _logger.warning(
+                'liff_redirect: login %s 已被%s帳號 %s(id=%s, partner=%s) 使用，'
+                '改用 placeholder login 另建，避免把 session 發給無關帳號（B-3）',
+                login, '非 share (內部)' if not existing.share else '其他 partner 的',
+                existing.login, existing.id, existing.partner_id.id,
+            )
+            login = f'line_p{partner.id}_{secrets.token_hex(6)}@line.placeholder'
 
         # 產生隨機密碼（用戶不需要用密碼登入，都是透過 LIFF）
         password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(32))
