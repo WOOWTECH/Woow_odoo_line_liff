@@ -19,10 +19,16 @@
                         <setting string="LINE 設定檔" help="選擇要檢視/編輯的 LINE 設定檔，或新增一個">
                             <div class="content-group">
                                 <div class="row mt16">
-                                    <field name="line_liff_config_id" class="col-lg-4"/>
+                                    <field name="line_liff_config_id" class="col-lg-4"
+                                           options="{'no_create': True}"/>
                                     <button type="action"
                                             name="%(woow_odoo_line_liff.action_line_liff_config)d"
                                             string="+新增設定檔" class="btn-link col-lg-3"/>
+                                </div>
+                                <div class="row mt8">
+                                    <span class="col-lg-9 text-muted">
+                                        本版本僅支援單一 LINE 官方帳號，請勿建立第二筆啟用中的設定檔。
+                                    </span>
                                 </div>
                             </div>
                         </setting>
