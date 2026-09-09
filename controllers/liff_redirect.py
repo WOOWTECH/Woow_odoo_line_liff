@@ -4,6 +4,7 @@
 # 流程：驗證 LINE ID Token → 找到/建立 portal user → session.authenticate → 302 redirect
 import json
 import logging
+import re
 import secrets
 import string
 
@@ -11,6 +12,30 @@ from odoo import http, SUPERUSER_ID
 from odoo.http import request
 
 _logger = logging.getLogger(__name__)
+
+# B-2：只接受安全字元的 target，避免任意字串（含 <script> breakout payload）
+# 被當成合法 target 一路帶進 inline <script>。
+_SAFE_TARGET_RE = re.compile(r'^[A-Za-z0-9_/-]{1,64}$')
+
+# B-2：這兩個 LIFF 中間頁都會把 target 這類外部可控字串內嵌進 inline <script>，
+# 補一個保守但不影響既有 liff.line-scdn.net SDK 運作的 CSP 當第三層防線。
+_LIFF_BRIDGE_CSP = (
+    "default-src 'self' https:; "
+    "script-src 'self' 'unsafe-inline' https://static.line-scdn.net https:; "
+    "style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: https:; "
+    "object-src 'none'; "
+    "base-uri 'none'; "
+    "frame-ancestors 'none'"
+)
+
+
+def _json_for_script(value):
+    """json.dumps() 但跳脫 <, >，避免內嵌進 inline <script> 時被
+    ``</script>`` 提前結束（B-2 反射型 XSS）。json.dumps 本身不會跳脫
+    HTML 特殊字元，直接插值進 <script> 是不安全的。
+    """
+    return json.dumps(value).replace('<', '\\u003c').replace('>', '\\u003e')
 
 
 class LiffRedirectController(http.Controller):
@@ -54,6 +79,15 @@ class LiffRedirectController(http.Controller):
         return request.env['ir.config_parameter'].sudo().get_param(
             'woow_odoo_line_liff.liff_id_member', ''
         )
+
+    def _sanitize_target(self, target):
+        """B-2：白名單過濾 target。不合法就退回預設值 'book'，不原樣回吐——
+        這兩個中間頁會把 target 內嵌進 inline <script>，任何不在安全字元集
+        內的字串都不應該被接受，即使後面還有跳脫處理。
+        """
+        if target and _SAFE_TARGET_RE.match(target):
+            return target
+        return 'book'
 
     def _authenticate_liff_user(self, target='book', **kwargs):
         """驗證 LIFF token 並建立 Odoo session
@@ -117,8 +151,14 @@ class LiffRedirectController(http.Controller):
                 '})();'
                 '</script></body></html>'
             )
-            html = html.replace('__LIFFID__', json.dumps(self._get_liff_id())).replace('__TARGET__', json.dumps(target))
-            return None, request.make_response(html, headers=[('Content-Type', 'text/html; charset=utf-8')])
+            safe_target = self._sanitize_target(target)
+            html = html.replace(
+                '__LIFFID__', _json_for_script(self._get_liff_id())
+            ).replace('__TARGET__', _json_for_script(safe_target))
+            return None, request.make_response(html, headers=[
+                ('Content-Type', 'text/html; charset=utf-8'),
+                ('Content-Security-Policy', _LIFF_BRIDGE_CSP),
+            ])
 
         line_uid = payload.get('sub')
         if not line_uid:
@@ -217,6 +257,8 @@ class LiffRedirectController(http.Controller):
         Fast path: 若 Odoo session cookie 仍有效，直接 302 到目標，跳過 LIFF login。
         """
         # ---- Fast path：既有 Odoo session 仍有效就直接放行 ----
+        # 用原始 target（跟 POST 成功後的 _get_redirect_url 一致），這裡只是
+        # 302 的 Location，不會被內嵌進 HTML，不需要收窄到 B-2 的白名單。
         try:
             if request.session and request.session.uid:
                 from odoo import api, SUPERUSER_ID
@@ -230,6 +272,9 @@ class LiffRedirectController(http.Controller):
                         return request.redirect(target_url)
         except Exception:
             _logger.exception('liff bridge fast-path 檢查失敗（fallback 到 LIFF 流程）')
+
+        # B-2：從這裡開始 target 會被內嵌進下面的 inline <script>，先過白名單。
+        target = self._sanitize_target(target)
 
         Config = request.env['line.liff.config'].sudo()
         config = Config._get_default_config()
@@ -261,7 +306,7 @@ class LiffRedirectController(http.Controller):
 <script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>
 <script>
 (function(){{
-var serverTarget={json.dumps(target)};
+var serverTarget={_json_for_script(target)};
 var fallbacks={json.dumps(direct_urls)};
 var liffId={json.dumps(liff_id)};
 var $st=document.getElementById('st');
@@ -293,7 +338,10 @@ liff.init({{liffId:liffId}}).then(function(){{
 }}).catch(function(e){{fb('LIFF 初始化失敗: '+(e.message||e.code||JSON.stringify(e)));}});
 }})();
 </script></body></html>"""
-        return request.make_response(html, headers=[('Content-Type', 'text/html')])
+        return request.make_response(html, headers=[
+            ('Content-Type', 'text/html'),
+            ('Content-Security-Policy', _LIFF_BRIDGE_CSP),
+        ])
 
     def _ensure_portal_user(self, line_user, id_token_payload):
         """確保 LINE 用戶有對應的 portal user
