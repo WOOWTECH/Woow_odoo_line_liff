@@ -98,31 +98,69 @@ class LineLiffConfig(models.Model):
         'shop_opening_hours': 'woow_odoo_line_liff.shop_opening_hours',
         'rebook_path': 'woow_odoo_line_liff.rebook_path',
         'richmenu_contact_text': 'woow_odoo_line_liff.richmenu_contact_text',
+        # H-18: 這兩個 key 讀取端（mail_notification_line.py / line_richmenu.py）
+        # 用的是 woow_line_base 前綴，不是 woow_odoo_line_liff — 對齊既有消費端，不要改成
+        # 看起來「比較一致」但實際讀不到的 woow_odoo_line_liff.* key。
+        'admin_line_user_id': 'woow_line_base.admin_line_user_id',
+        'auto_line_notify': 'woow_line_base.auto_line_notify',
     }
+
+    # B-4: falsy 值一律 skip 的規則，對 Boolean 欄位不適用 —
+    # 這裡列出的欄位在同步時永遠寫入（包含 False），見 _sync_to_system_params。
+    _SYNC_BOOLEAN_FIELDS = {'auto_line_notify'}
 
     @api.model_create_multi
     def create(self, vals_list):
         records = super().create(vals_list)
-        for rec in records:
-            rec._sync_to_system_params()
+        for vals, rec in zip(vals_list, records):
+            fields_to_sync = [f for f in self._SYNC_FIELDS if f in vals]
+            if fields_to_sync:
+                rec._sync_to_system_params(fields_to_sync)
         return records
 
     def write(self, vals):
         res = super().write(vals)
-        if any(f in vals for f in self._SYNC_FIELDS):
+        fields_to_sync = [f for f in self._SYNC_FIELDS if f in vals]
+        if fields_to_sync:
             for rec in self:
-                rec._sync_to_system_params()
+                rec._sync_to_system_params(fields_to_sync)
         return res
 
-    def _sync_to_system_params(self):
-        """將 config 欄位同步到 ir.config_parameter（line.api.service 讀取來源）"""
+    def _sync_to_system_params(self, fields_to_sync=None):
+        """將 config 欄位同步到 ir.config_parameter（line.api.service 讀取來源）
+
+        B-4：只同步這次 create/write 實際帶到的欄位（`fields_to_sync`），而且
+        falsy 值一律 skip 不寫入 —— 分頁式漸進存檔（res.config.settings 的
+        related 欄位）一次只會帶到使用者正在看的那個分頁，若對全部 16 個 key
+        做無條件回寫，沒被觸碰的其他分頁欄位會被空字串覆蓋掉既有憑證/設定。
+        要清空某個值，請用明確的清除動作，不要依賴存檔的副作用。
+
+        H-18：`_SYNC_BOOLEAN_FIELDS` 裡的欄位（目前只有 auto_line_notify）不吃
+        上面「falsy 就 skip」這條規則 —— Boolean 只有兩態，没有「空字串 vs 未填」
+        的模糊地帶，如果連 False 也 skip，這個開關就永遠關不掉（等於把「欄位沒
+        同步」的死開關換成「關不掉」的死開關，換湯不換藥）。所以只要這次
+        create/write 有帶到這個欄位，就無條件把目前值（True 或 False）寫進去。
+        """
         self.ensure_one()
         ICP = self.env['ir.config_parameter'].sudo()
-        for field_name, param_key in self._SYNC_FIELDS.items():
-            value = getattr(self, field_name, '') or ''
+        field_names = fields_to_sync if fields_to_sync is not None else list(self._SYNC_FIELDS)
+        synced = 0
+        for field_name in field_names:
+            if field_name not in self._SYNC_FIELDS:
+                continue
+            param_key = self._SYNC_FIELDS[field_name]
+            value = getattr(self, field_name, False)
+            if field_name in self._SYNC_BOOLEAN_FIELDS:
+                ICP.set_param(param_key, str(bool(value)))
+                synced += 1
+                continue
+            if not value:
+                continue
             ICP.set_param(param_key, value)
-        _logger.info('LINE config %s: 已同步 %d 個參數到 ir.config_parameter',
-                     self.name, len(self._SYNC_FIELDS))
+            synced += 1
+        if synced:
+            _logger.info('LINE config %s: 已同步 %d 個參數到 ir.config_parameter',
+                         self.name, synced)
 
     # ── Helper 方法 ──
 
