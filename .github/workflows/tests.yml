@@ -46,6 +46,18 @@ jobs:
       MODULES: "woow_line_base,woow_odoo_line_liff"
       TESTED: "line_ci/woow_odoo_line_liff"
 
+    defaults:
+      run:
+        # GitHub Actions runs container-job steps under `sh -e {0}` by default,
+        # and dash has no `set -o pipefail` — the previous version of this file
+        # died on "Illegal option -o pipefail" before Odoo was ever invoked.
+        # Naming bash explicitly makes Actions use
+        # `bash --noprofile --norc -eo pipefail {0}`, so pipefail applies to
+        # every step here. That matters beyond the crash: without it a step
+        # ending in `| tail` reports the tail's exit code, so a failing Odoo
+        # run would show up green.
+        shell: bash
+
     steps:
       - name: Check out this module
         uses: actions/checkout@v4
@@ -65,11 +77,10 @@ jobs:
             --db_host=db --db_user=odoo --db_password=odoo \
             --addons-path=addons,/usr/lib/python3/dist-packages/odoo/addons \
             -i "$MODULES" --without-demo=all \
-            --stop-after-init --no-http 2>&1 | tail -20
+            --stop-after-init --no-http 2>&1 | tee install.log | tail -30
 
       - name: Run tests
         run: |
-          set -o pipefail
           odoo -d ci_test \
             --db_host=db --db_user=odoo --db_password=odoo \
             --addons-path=addons,/usr/lib/python3/dist-packages/odoo/addons \
@@ -81,9 +92,13 @@ jobs:
         # Guards the failure mode described at the top of this file: a suite
         # that collects nothing exits 0 and looks green.
         run: |
-          ran=$(grep -oE 'tests\.stats: [a-z_]+: [0-9]+ tests' run.log \
-                | grep -oE '[0-9]+ tests' | grep -oE '[0-9]+' \
-                | awk '{s+=$1} END {print s+0}')
+          # One awk, not a grep chain: grep exits 1 when it matches nothing,
+          # and under `-e` that would kill this step at the assignment — before
+          # the diagnostic below could explain why. awk always exits 0, so the
+          # zero-tests case reaches the message it is here to print.
+          ran=$(awk '/odoo\.tests\.stats:/ {
+                       for (i = 1; i <= NF; i++) if ($i == "tests") s += $(i-1)
+                     } END { print s + 0 }' run.log)
           echo "tests executed: $ran (minimum expected: $MIN_TESTS)"
           if [ "$ran" -lt "$MIN_TESTS" ]; then
             echo "::error::only $ran tests ran, expected at least $MIN_TESTS —"\
