@@ -1,0 +1,108 @@
+name: tests
+
+# Runs the module's own test suite against a real Odoo 18 + PostgreSQL 16 on
+# every push and pull request.
+#
+# Why this exists: this suite was silently dead for a long time. tests/common.py
+# imported a module that does not exist in the repo, so every test died in
+# setUp and the whole file reported nothing. Nobody noticed, because nothing was
+# running it. A test that is never executed is indistinguishable from a test
+# that does not exist — except that it looks like coverage.
+#
+# That failure mode is what the MIN_TESTS guard below defends against: a suite
+# that imports nothing exits 0 with zero tests, which would otherwise be a green
+# build.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  odoo-tests:
+    runs-on: ubuntu-latest
+    container:
+      image: odoo:18
+      options: --user root
+
+    services:
+      db:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: odoo
+          POSTGRES_PASSWORD: odoo
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd "pg_isready -U odoo"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      # Bump when adding a test class, so an import that silently stops
+      # collecting is caught instead of passing as a green build.
+      MIN_TESTS: "25"
+      MODULES: "woow_line_base,woow_odoo_line_liff"
+      TESTED: "line_ci/woow_odoo_line_liff"
+
+    defaults:
+      run:
+        # GitHub Actions runs container-job steps under `sh -e {0}` by default,
+        # and dash has no `set -o pipefail` — the previous version of this file
+        # died on "Illegal option -o pipefail" before Odoo was ever invoked.
+        # Naming bash explicitly makes Actions use
+        # `bash --noprofile --norc -eo pipefail {0}`, so pipefail applies to
+        # every step here. That matters beyond the crash: without it a step
+        # ending in `| tail` reports the tail's exit code, so a failing Odoo
+        # run would show up green.
+        shell: bash
+
+    steps:
+      - name: Check out this module
+        uses: actions/checkout@v4
+        with:
+          path: addons/woow_odoo_line_liff
+
+      - name: Check out woow_line_base (dependency)
+        uses: actions/checkout@v4
+        with:
+          repository: WOOWTECH/woow_line_base
+          path: addons/woow_line_base
+
+
+      - name: Install into a fresh database
+        run: |
+          odoo -d ci_test \
+            --db_host=db --db_user=odoo --db_password=odoo \
+            --addons-path=addons,/usr/lib/python3/dist-packages/odoo/addons \
+            -i "$MODULES" --without-demo=all \
+            --stop-after-init --no-http 2>&1 | tee install.log | tail -30
+
+      - name: Run tests
+        run: |
+          odoo -d ci_test \
+            --db_host=db --db_user=odoo --db_password=odoo \
+            --addons-path=addons,/usr/lib/python3/dist-packages/odoo/addons \
+            -u "$MODULES" --test-enable --test-tags="$TESTED" \
+            --http-port=8199 --gevent-port=8198 \
+            --stop-after-init 2>&1 | tee run.log
+
+      - name: Assert the suite actually ran
+        # Guards the failure mode described at the top of this file: a suite
+        # that collects nothing exits 0 and looks green.
+        run: |
+          # One awk, not a grep chain: grep exits 1 when it matches nothing,
+          # and under `-e` that would kill this step at the assignment — before
+          # the diagnostic below could explain why. awk always exits 0, so the
+          # zero-tests case reaches the message it is here to print.
+          ran=$(awk '/odoo\.tests\.stats:/ {
+                       for (i = 1; i <= NF; i++) if ($i == "tests") s += $(i-1)
+                     } END { print s + 0 }' run.log)
+          echo "tests executed: $ran (minimum expected: $MIN_TESTS)"
+          if [ "$ran" -lt "$MIN_TESTS" ]; then
+            echo "::error::only $ran tests ran, expected at least $MIN_TESTS —"\
+                 "the suite is probably not being collected (a broken import in"\
+                 "tests/__init__.py or tests/common.py will do this silently)"
+            exit 1
+          fi
