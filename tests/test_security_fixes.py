@@ -12,7 +12,7 @@ from odoo.tests import TransactionCase, tagged
 from ..controllers.liff_redirect import LiffRedirectController, _json_for_script
 
 
-@tagged('post_install', '-at_install')
+@tagged('post_install', '-at_install', 'line_ci')
 class TestLiffRedirectSanitising(TransactionCase):
     """B-2: the redirect bridge embeds `target` in an inline <script>."""
 
@@ -52,7 +52,7 @@ class TestLiffRedirectSanitising(TransactionCase):
                          LiffRedirectController.REDIRECT_TARGETS['book'])
 
 
-@tagged('post_install', '-at_install')
+@tagged('post_install', '-at_install', 'line_ci')
 class TestLiffConfigSync(TransactionCase):
     """B-4/B-5: config writes used to blank unrelated credentials."""
 
@@ -100,7 +100,7 @@ class TestLiffConfigSync(TransactionCase):
                          'woow_line_base.auto_line_notify')
 
 
-@tagged('post_install', '-at_install')
+@tagged('post_install', '-at_install', 'line_ci')
 class TestNewsPublication(TransactionCase):
     """B-9: draft articles were publicly readable."""
 
