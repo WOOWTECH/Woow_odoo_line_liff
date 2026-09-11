@@ -15,3 +15,9 @@ from . import test_news_broadcast_fallback
 from . import test_webhook_robustness
 from . import test_webhook_forwarding
 from . import test_auto_reply_regex_dos
+from . import test_liff_login_record
+from . import test_audience_delete_result
+from . import test_richmenu_area_bounds
+from . import test_richmenu_error_details
+from . import test_news_narrowcast_message
+from . import test_liff_clear_session

@@ -21,19 +21,20 @@ class LiffPagesController(http.Controller):
     auth='public' 因為初次打開時用戶尚未登入 Odoo。
     """
 
-    @http.route('/liff/clear-session', type='http', auth='none', csrf=False,
-                save_session=False)
+    @http.route('/liff/clear-session', type='http', auth='none', csrf=False)
     def liff_clear_session(self, **kwargs):
         """清除壞掉的 session 並重導回登入頁
 
         當 LIFF 登入產生壞 session 時，所有頁面都會 403。
         這個 auth='none' 的端點不會觸發 session 驗證，
         所以可以安全地清除 session 後重導。
+
+        不能宣告 save_session=False：Odoo 18 在那種路由上完全不存 session
+        （http.py 的 _save_session 看到 can_save 為否就直接返回），清除的結果
+        不會寫回，客人還是卡在原本壞掉的登入狀態。
         """
         redirect_to = kwargs.get('r', '/web/login')
-        # 清除 session
-        request.session.uid = False
-        request.session.login = None
+        request.session.logout(keep_db=True)
         _logger.info('已清除壞 session，重導到 %s', redirect_to)
         return request.redirect(redirect_to)
 

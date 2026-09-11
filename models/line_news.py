@@ -163,7 +163,12 @@ class LineNews(models.Model):
 
             method_label = dict(self._fields['push_method'].selection).get(
                 actual_method, actual_method)
-            if sent_count:
+            if actual_method == 'narrowcast':
+                # 精準推播只送給分眾名單（_execute_push 用第一個已同步的標籤），
+                # 不能沿用全員推播的「推播給所有好友」
+                audience = self.push_audience_tag_ids.filtered('line_audience_group_id')[:1]
+                msg = f'已透過精準推播送出（分眾：{audience.name}，第 {self.line_push_count} 次）'
+            elif sent_count:
                 msg = f'已透過{method_label}推播給 {sent_count} 位好友（第 {self.line_push_count} 次）'
             else:
                 msg = f'已透過{method_label}推播給所有好友（第 {self.line_push_count} 次）'

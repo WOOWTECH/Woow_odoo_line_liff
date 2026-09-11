@@ -4,9 +4,10 @@
 import base64
 import json
 import logging
+import re
 
 from odoo import api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
 
@@ -64,6 +65,17 @@ class LineRichMenu(models.Model):
     # 業務方法
     # ------------------------------------------------------------------
 
+    @api.constrains('size')
+    def _check_areas_fit_the_size(self):
+        """改選單尺寸（例如大改小）時，既有的每一格都要重新落在圖片內"""
+        for menu in self:
+            size = menu._get_size_dict()
+            for area in menu.area_ids:
+                error = area._bounds_error()
+                if error:
+                    raise ValidationError(
+                        f'選單改成 {size["width"]}×{size["height"]} 後，{error}')
+
     def _get_size_dict(self):
         if self.size == 'full':
             return {'width': 2500, 'height': 1686}
@@ -90,15 +102,53 @@ class LineRichMenu(models.Model):
             'areas': areas,
         }
 
+    # LINE details 裡 property 的欄位 → 操作者看得懂的名稱
+    _LINE_FIELD_NAMES = {
+        'action.uri': '網址', 'action.label': '標籤', 'action.text': '訊息文字',
+        'action.data': 'Postback 資料', 'action.richMenuAliasId': '切換目標',
+        'action.clipboardText': '複製文字', 'bounds.x': 'X', 'bounds.y': 'Y',
+        'bounds.width': '寬', 'bounds.height': '高',
+    }
+
     def _line_error_message(self, status_code, body):
-        """把 LINE 回傳的錯誤 body（通常是 {"message": "..."}）轉成訊息文字"""
-        message = ''
+        """把 LINE 的錯誤回應轉成操作者看得懂的一句話。
+
+        LINE 的 body 長這樣（2026-09-11 komibright 實測）：
+          {"message": "The request body has 3 error(s)",
+           "details": [{"message": "invalid uri", "property": "areas[5].action.uri"}, ...]}
+        只顯示 message 的話看不出是哪一格、錯在哪；有 details 就把 areas[N]
+        對回選單的第 N+1 格（與送出時的順序相同）逐項列出，保留 LINE 原文。
+        """
+        message, details = '', []
         if body:
             try:
-                message = json.loads(body).get('message', '')
+                parsed = json.loads(body)
+                message = parsed.get('message', '')
+                details = parsed.get('details') or []
             except (ValueError, AttributeError, TypeError):
                 message = body
-        return f'{message}（HTTP {status_code}）' if message else f'HTTP {status_code}'
+        described = self._describe_line_details(details)
+        text = '；'.join(described) if described else message
+        return f'{text}（HTTP {status_code}）' if text else f'HTTP {status_code}'
+
+    def _describe_line_details(self, details):
+        """details → ['第 6 格「聯絡我們」網址（action.uri）：invalid uri scheme、invalid uri', ...]"""
+        grouped = {}
+        for detail in details:
+            if isinstance(detail, dict):
+                grouped.setdefault(detail.get('property') or '', []).append(detail.get('message', ''))
+        areas = self.area_ids
+        described = []
+        for prop, messages in grouped.items():
+            match = re.fullmatch(r'areas\[(\d+)\]\.(.+)', prop)
+            if match and int(match.group(1)) < len(areas):
+                field = match.group(2)
+                where = (areas[int(match.group(1))]._position_label()
+                         + self._LINE_FIELD_NAMES.get(field, '') + f'（{field}）')
+            else:
+                where = prop or '選單'
+            described.append(f'{where}：{"、".join(m for m in messages if m)}')
+        return described
 
     def _build_and_upload_to_line(self):
         """在 LINE 建立新選單並上傳圖片，回傳新的 richMenuId。
@@ -119,7 +169,7 @@ class LineRichMenu(models.Model):
         richmenu_id, status_code, body = api.richmenu_create_ex(menu_data)
         if not richmenu_id:
             raise UserError(
-                f'LINE Rich Menu 建立失敗：{self._line_error_message(status_code, body)}')
+                f'LINE 拒絕建立圖文選單：{self._line_error_message(status_code, body)}')
 
         # 上傳圖片
         image_data = base64.b64decode(self.image)
@@ -127,11 +177,13 @@ class LineRichMenu(models.Model):
         if self.image_filename and self.image_filename.lower().endswith(('.jpg', '.jpeg')):
             content_type = 'image/jpeg'
 
-        success = api.richmenu_upload_image(richmenu_id, image_data, content_type)
-        if not success:
+        ok, status_code, body = api.richmenu_upload_image_ex(richmenu_id, image_data, content_type)
+        if not ok:
             # 清理已建立的 menu，不留半成品在 LINE 上
             api.richmenu_delete(richmenu_id)
-            raise UserError('圖片上傳失敗，請確認圖片尺寸符合要求')
+            raise UserError(
+                f'圖片上傳失敗：{self._line_error_message(status_code, body)}。'
+                '圖片須為 2500×1686 或 2500×843、1 MB 以內的 PNG 或 JPEG。')
 
         return richmenu_id
 
@@ -356,6 +408,43 @@ class LineRichMenuArea(models.Model):
     action_data = fields.Char('Postback Data (舊)')
     action_richmenu_alias = fields.Char('Alias (舊)')
     action_clipboard_text = fields.Char('複製文字 (舊)')
+
+    @api.constrains('x', 'y', 'width', 'height', 'richmenu_id')
+    def _check_inside_the_menu(self):
+        """每一格都要完整落在選單圖片內。
+
+        LINE 的 API 不檢查這件事：超出圖片的格子照樣會被接受並上線，
+        結果那一格客人點不到（2026-09-11 komibright 實測）。
+        """
+        for area in self:
+            error = area._bounds_error()
+            if error:
+                raise ValidationError(error)
+
+    def _bounds_error(self):
+        """這一格超出選單範圍時回傳一句說明，否則回傳 None"""
+        self.ensure_one()
+        size = self.richmenu_id._get_size_dict()
+        width, height = size['width'], size['height']
+        name = self._position_label()
+        if self.x < 0 or self.y < 0:
+            return f'{name}的位置不能是負數（x {self.x}、y {self.y}）'
+        if self.width <= 0 or self.height <= 0:
+            return f'{name}的寬、高必須大於 0（寬 {self.width}、高 {self.height}）'
+        if self.x + self.width > width:
+            return (f'{name}超出選單範圍：x {self.x} + 寬 {self.width} = '
+                    f'{self.x + self.width}，選單寬 {width}')
+        if self.y + self.height > height:
+            return (f'{name}超出選單範圍：y {self.y} + 高 {self.height} = '
+                    f'{self.y + self.height}，選單高 {height}')
+        return None
+
+    def _position_label(self):
+        """「第 N 格「標籤」」：N 是這一格在選單裡的順序，也是送給 LINE 的順序"""
+        self.ensure_one()
+        area_ids = self.richmenu_id.area_ids.ids
+        position = f'第 {area_ids.index(self.id) + 1} 格' if self.id in area_ids else '這一格'
+        return f'{position}「{self.label}」' if self.label else position
 
     def _get_action_value(self):
         """取得動作值（優先 action_value，向下相容舊欄位）"""
