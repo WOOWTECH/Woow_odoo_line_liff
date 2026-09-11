@@ -420,8 +420,15 @@ class LineWebhookController(http.Controller):
             'locations': '店家位置',
         }
         label = target_labels.get(target, '立即預約')
-        page = target if target in ('news', 'locations') else 'book'
-        url = flex_tmpl._liff_url(page)
+        if target in ('news', 'locations'):
+            url = flex_tmpl._liff_url(target)
+        else:
+            # Booking targets open through the member LIFF redirect bridge.
+            # _liff_url() looks up one LIFF app per page name, and there is no
+            # `liff_id_book`, so it fell back to /liff/book — a route that does
+            # not exist, which handed the customer a 404.
+            url = flex_tmpl._liff_redirect_url(
+                target if target in target_labels else 'book')
 
         request.env['line.api.service'].sudo().reply(reply_token, [{
             'type': 'text',

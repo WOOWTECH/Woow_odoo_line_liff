@@ -5,3 +5,4 @@ from . import test_flex_template
 from . import test_webhook
 from . import test_security_fixes
 from . import test_attack_surface
+from . import test_richmenu_postback
