@@ -65,7 +65,7 @@ class LineAudienceTag(models.Model):
             leftover = None
             if old_group_id:
                 ok, status_code, body = api.audience_delete_ex(int(old_group_id))
-                if not ok and status_code != 404:
+                if not ok and not self._audience_gone(status_code, body):
                     leftover = (old_group_id, self._line_error_text(status_code, body))
                     _logger.warning('Audience 同步：舊名單 %s 未能從 LINE 刪除（%s）',
                                     old_group_id, leftover[1])
@@ -93,7 +93,7 @@ class LineAudienceTag(models.Model):
         if self.line_audience_group_id:
             ok, status_code, body = self.env['line.api.service'].audience_delete_ex(
                 int(self.line_audience_group_id))
-            if status_code == 404:
+            if self._audience_gone(status_code, body):
                 # LINE 上本來就沒有了：舊連結留著只會誤導，清掉即可
                 message = 'LINE 上已不存在這份名單，已清除 Odoo 裡的連結'
             elif not ok:
@@ -102,6 +102,24 @@ class LineAudienceTag(models.Model):
                     '名單仍保留在 LINE 上，Odoo 也保留它的編號，可以稍後再試一次。')
             self.write({'line_audience_group_id': False})
         return self._notification(message, 'success')
+
+    @staticmethod
+    def _audience_gone(status_code, body):
+        """LINE 上已經沒有這份 audience 了嗎？
+
+        LINE 對已不存在的 audience 回 400 {"message": "audience group not found"}
+        （2026-09-12 komibright 實測），不是 404；其他 400（例如編號格式錯）
+        仍然是真的失敗，不能當成已刪除。404 也一併視為不存在。
+        """
+        if status_code == 404:
+            return True
+        if status_code != 400 or not body:
+            return False
+        try:
+            message = json.loads(body).get('message', '')
+        except (ValueError, AttributeError, TypeError):
+            message = body
+        return 'not found' in str(message).lower()
 
     @staticmethod
     def _line_error_text(status_code, body):
