@@ -145,12 +145,14 @@ class LineNews(models.Model):
             }]
 
             method = self.push_method or 'broadcast'
-            success, sent_count, actual_method = self._execute_push(messages, method)
+            success, sent_count, actual_method, error_detail = self._execute_push(messages, method)
 
             if not success:
-                return self._push_notification(
-                    '推播失敗：LINE API 回傳錯誤，請檢查 Access Token 或改用 Multicast',
-                    'danger')
+                if error_detail:
+                    msg = f'推播失敗：{error_detail}'
+                else:
+                    msg = '推播失敗：LINE API 回傳錯誤，請檢查 Access Token 或改用 Multicast'
+                return self._push_notification(msg, 'danger')
 
             self.write({
                 'line_push_count': self.line_push_count + 1,
@@ -173,19 +175,27 @@ class LineNews(models.Model):
             return self._push_notification('推播失敗，請查看系統日誌', 'danger')
 
     def _execute_push(self, messages, method):
-        """執行推播，回傳 (success, sent_count, actual_method)
+        """執行推播，回傳 (success, sent_count, actual_method, error_detail)
 
-        Broadcast 失敗自動降級到 Multicast。
+        H-2：只有 429（配額受限）才降級到 Multicast。逾時（LINE 可能已受理）
+        或其他 4xx/5xx 一律視為不確定/失敗狀態，直接回報，絕不自動降級——
+        降級等於用 Multicast 把同一則訊息再送一次，讓好友收到兩次。
+        error_detail 只在失敗時有值，供 UI 顯示原因。
         """
         api = self.env['line.api.service']
         PushLog = self.env['line.push.log'].sudo()
 
         # ── Broadcast ──
         if method == 'broadcast':
-            success = api.broadcast(messages)
-            if success:
-                self._log_broadcast(PushLog, messages, True)
-                return True, 0, 'broadcast'
+            ok, status_code, body = api.broadcast_ex(messages)
+            self._log_push(PushLog, 'broadcast', messages, status_code, body, ok)
+            if ok:
+                return True, 0, 'broadcast', None
+            if status_code != 429:
+                _logger.warning(
+                    'Broadcast 失敗 (%s)，不自動降級以避免重複投遞: %s — %s',
+                    status_code, self.title, body)
+                return False, 0, 'broadcast', f'LINE 回應 {status_code}：{body}'
             # 降級到 multicast
             _logger.info('Broadcast 受限 (429)，自動降級到 Multicast: %s', self.title)
             method = 'multicast'
@@ -194,14 +204,16 @@ class LineNews(models.Model):
         targets = self._get_push_targets()
         if not targets:
             _logger.warning('推播無目標用戶: %s', self.title)
-            return False, 0, method
+            return False, 0, method, '沒有符合條件的推播對象'
 
         # ── Multicast ──
         if method == 'multicast':
             uids = [lu.line_user_id for lu in targets]
-            success = api.multicast(uids, messages)
-            self._log_multicast(PushLog, targets, messages, success)
-            return success, len(uids) if success else 0, 'multicast'
+            ok, status_code, body = api.multicast_ex(uids, messages)
+            self._log_push(PushLog, 'multicast', messages, status_code, body, ok)
+            if ok:
+                return True, len(uids), 'multicast', None
+            return False, 0, 'multicast', f'LINE 回應 {status_code}：{body}'
 
         # ── Narrowcast（精準推播）──
         if method == 'narrowcast':
@@ -225,16 +237,18 @@ class LineNews(models.Model):
                 _logger.warning(
                     'Narrowcast 無有效 recipient（分眾標籤未同步或未指定），'
                     '已中止推播避免變相全員推播: %s', self.title)
-                return False, 0, 'narrowcast'
+                return False, 0, 'narrowcast', '分眾標籤未同步或未指定'
             request_id = api.narrowcast(messages, recipient=recipient)
             if request_id:
-                self._log_broadcast(PushLog, messages, True)
-                return True, 0, 'narrowcast'
-            return False, 0, 'narrowcast'
+                self._log_push(PushLog, 'narrowcast', messages, 200, request_id, True)
+                return True, 0, 'narrowcast', None
+            return False, 0, 'narrowcast', 'LINE narrowcast 呼叫失敗'
 
         # ── Push（逐一）──
         sent_ids = api.push(targets, messages)
-        return len(sent_ids) > 0, len(sent_ids), 'push'
+        if sent_ids:
+            return True, len(sent_ids), 'push', None
+        return False, 0, 'push', '所有個別推播皆失敗'
 
     def _get_push_targets(self):
         """取得推播目標 line.user recordset"""
@@ -247,23 +261,18 @@ class LineNews(models.Model):
             ('notification_enabled', '=', True),
         ])
 
-    def _log_broadcast(self, PushLog, messages, success):
-        """記錄 broadcast 推播"""
-        PushLog.create({
-            'config_id': self.config_id.id if self.config_id else False,
-            'messages': json.dumps(messages, ensure_ascii=False),
-            'status_code': 200 if success else 429,
-            'response_body': 'broadcast',
-            'success': success,
-        })
+    def _log_push(self, PushLog, method, messages, status_code, body, success):
+        """記錄一次推播嘗試（broadcast/multicast/narrowcast 各自呼叫一次）
 
-    def _log_multicast(self, PushLog, targets, messages, success):
-        """記錄 multicast 推播"""
+        H-2：以前 broadcast 失敗一律硬編 429、成功一律硬編 200（因為
+        broadcast()/multicast() 只回傳 bool），且失敗的 broadcast 從不寫入
+        記錄。現在改用 *_ex()，狀態碼與 body 都是 LINE 的真實回應。
+        """
         PushLog.create({
             'config_id': self.config_id.id if self.config_id else False,
             'messages': json.dumps(messages, ensure_ascii=False),
-            'status_code': 200 if success else 0,
-            'response_body': f'multicast to {len(targets)} users',
+            'status_code': status_code,
+            'response_body': f'[{method}] {body}' if body else f'[{method}]',
             'success': success,
         })
 
