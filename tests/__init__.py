@@ -9,3 +9,4 @@ from . import test_richmenu_postback
 from . import test_webhook_without_livechat_line
 from . import test_audience_sync
 from . import test_mail_notification_line
+from . import test_news_broadcast_fallback
