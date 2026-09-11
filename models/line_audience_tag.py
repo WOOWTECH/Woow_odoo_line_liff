@@ -46,20 +46,22 @@ class LineAudienceTag(models.Model):
         self.ensure_one()
         api = self.env['line.api.service']
         user_ids = self.user_ids.filtered(
-            lambda u: u.is_follower and u.line_user_id
+            lambda u: u.is_follower and not u.is_blocked
+            and u.notification_enabled and u.line_user_id
         ).mapped('line_user_id')
         if not user_ids:
             return self._notification('沒有可同步的用戶', 'warning')
 
-        if self.line_audience_group_id:
-            # 已有 audience group → 刪除重建（LINE 不支援替換全部用戶）
-            api.audience_delete(int(self.line_audience_group_id))
-
+        old_group_id = self.line_audience_group_id
         group_id = api.audience_create(
             description=f'Odoo: {self.name}',
             user_ids=user_ids,
         )
         if group_id:
+            # 新的建立成功後才刪除舊的（LINE 不支援替換全部用戶）；
+            # 若先刪除，create 失敗會讓 tag 指向一個已不存在的 audience。
+            if old_group_id:
+                api.audience_delete(int(old_group_id))
             self.write({'line_audience_group_id': str(group_id)})
             _logger.info('Audience 同步成功: %s → %s (%d users)',
                          self.name, group_id, len(user_ids))
