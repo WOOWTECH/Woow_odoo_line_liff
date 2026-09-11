@@ -4,6 +4,7 @@
 import base64
 import json
 import logging
+import re
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError, ValidationError
@@ -101,15 +102,53 @@ class LineRichMenu(models.Model):
             'areas': areas,
         }
 
+    # LINE details 裡 property 的欄位 → 操作者看得懂的名稱
+    _LINE_FIELD_NAMES = {
+        'action.uri': '網址', 'action.label': '標籤', 'action.text': '訊息文字',
+        'action.data': 'Postback 資料', 'action.richMenuAliasId': '切換目標',
+        'action.clipboardText': '複製文字', 'bounds.x': 'X', 'bounds.y': 'Y',
+        'bounds.width': '寬', 'bounds.height': '高',
+    }
+
     def _line_error_message(self, status_code, body):
-        """把 LINE 回傳的錯誤 body（通常是 {"message": "..."}）轉成訊息文字"""
-        message = ''
+        """把 LINE 的錯誤回應轉成操作者看得懂的一句話。
+
+        LINE 的 body 長這樣（2026-09-11 komibright 實測）：
+          {"message": "The request body has 3 error(s)",
+           "details": [{"message": "invalid uri", "property": "areas[5].action.uri"}, ...]}
+        只顯示 message 的話看不出是哪一格、錯在哪；有 details 就把 areas[N]
+        對回選單的第 N+1 格（與送出時的順序相同）逐項列出，保留 LINE 原文。
+        """
+        message, details = '', []
         if body:
             try:
-                message = json.loads(body).get('message', '')
+                parsed = json.loads(body)
+                message = parsed.get('message', '')
+                details = parsed.get('details') or []
             except (ValueError, AttributeError, TypeError):
                 message = body
-        return f'{message}（HTTP {status_code}）' if message else f'HTTP {status_code}'
+        described = self._describe_line_details(details)
+        text = '；'.join(described) if described else message
+        return f'{text}（HTTP {status_code}）' if text else f'HTTP {status_code}'
+
+    def _describe_line_details(self, details):
+        """details → ['第 6 格「聯絡我們」網址（action.uri）：invalid uri scheme、invalid uri', ...]"""
+        grouped = {}
+        for detail in details:
+            if isinstance(detail, dict):
+                grouped.setdefault(detail.get('property') or '', []).append(detail.get('message', ''))
+        areas = self.area_ids
+        described = []
+        for prop, messages in grouped.items():
+            match = re.fullmatch(r'areas\[(\d+)\]\.(.+)', prop)
+            if match and int(match.group(1)) < len(areas):
+                field = match.group(2)
+                where = (areas[int(match.group(1))]._position_label()
+                         + self._LINE_FIELD_NAMES.get(field, '') + f'（{field}）')
+            else:
+                where = prop or '選單'
+            described.append(f'{where}：{"、".join(m for m in messages if m)}')
+        return described
 
     def _build_and_upload_to_line(self):
         """在 LINE 建立新選單並上傳圖片，回傳新的 richMenuId。
@@ -130,7 +169,7 @@ class LineRichMenu(models.Model):
         richmenu_id, status_code, body = api.richmenu_create_ex(menu_data)
         if not richmenu_id:
             raise UserError(
-                f'LINE Rich Menu 建立失敗：{self._line_error_message(status_code, body)}')
+                f'LINE 拒絕建立圖文選單：{self._line_error_message(status_code, body)}')
 
         # 上傳圖片
         image_data = base64.b64decode(self.image)
@@ -138,11 +177,13 @@ class LineRichMenu(models.Model):
         if self.image_filename and self.image_filename.lower().endswith(('.jpg', '.jpeg')):
             content_type = 'image/jpeg'
 
-        success = api.richmenu_upload_image(richmenu_id, image_data, content_type)
-        if not success:
+        ok, status_code, body = api.richmenu_upload_image_ex(richmenu_id, image_data, content_type)
+        if not ok:
             # 清理已建立的 menu，不留半成品在 LINE 上
             api.richmenu_delete(richmenu_id)
-            raise UserError('圖片上傳失敗，請確認圖片尺寸符合要求')
+            raise UserError(
+                f'圖片上傳失敗：{self._line_error_message(status_code, body)}。'
+                '圖片須為 2500×1686 或 2500×843、1 MB 以內的 PNG 或 JPEG。')
 
         return richmenu_id
 

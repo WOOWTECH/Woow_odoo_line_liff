@@ -18,3 +18,4 @@ from . import test_auto_reply_regex_dos
 from . import test_liff_login_record
 from . import test_audience_delete_result
 from . import test_richmenu_area_bounds
+from . import test_richmenu_error_details
