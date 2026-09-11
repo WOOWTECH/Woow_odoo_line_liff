@@ -248,6 +248,20 @@ class LineRichMenu(models.Model):
             },
         }
 
+    def _delete_on_line_or_raise(self, richmenu_id):
+        """刪除 LINE 上的 Rich Menu；200 或 404（已經不存在）視為成功。
+
+        H-8：舊版把刪除結果丟掉，導致刪不掉的選單留在 LINE 上，佔掉
+        1000 個選單的額度卻再也管不到。失敗時拋出 UserError，讓呼叫端保留
+        記錄與其 LINE 連結不變。
+        """
+        api = self.env['line.api.service']
+        ok, status_code, body = api.richmenu_delete_ex(richmenu_id)
+        if ok or status_code == 404:
+            return
+        raise UserError(
+            f'刪除 LINE Rich Menu 失敗：{self._line_error_message(status_code, body)}')
+
     def action_archive(self):
         """從 LINE 刪除並封存"""
         self.ensure_one()
@@ -255,12 +269,22 @@ class LineRichMenu(models.Model):
             api = self.env['line.api.service']
             if self.is_default:
                 api.richmenu_clear_default()
-            api.richmenu_delete(self.line_richmenu_id)
+            self._delete_on_line_or_raise(self.line_richmenu_id)
         self.write({
             'state': 'archived',
             'is_default': False,
             'line_richmenu_id': False,
         })
+
+    def unlink(self):
+        """刪除前先刪 LINE 上的選單；刪不掉就整批拒絕，記錄與其 LINE 連結不變
+
+        H-8：管理員原本可以直接刪除記錄，LINE 上的選單完全沒被清掉。
+        """
+        for menu in self:
+            if menu.line_richmenu_id:
+                menu._delete_on_line_or_raise(menu.line_richmenu_id)
+        return super().unlink()
 
     def action_preview(self):
         """綁定到管理員自己的 LINE 預覽"""
