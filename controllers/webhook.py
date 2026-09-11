@@ -49,8 +49,8 @@ class LineWebhookController(http.Controller):
             channel_secret = config.messaging_channel_secret
 
         # 2) Fallback: 嘗試 im_livechat.channel（livechat 獨立模式）
-        if not channel_secret and 'im_livechat.channel' in request.env:
-            LivechatChannel = request.env['im_livechat.channel'].sudo()
+        LivechatChannel = None if channel_secret else self._livechat_line_channels()
+        if LivechatChannel is not None:
             if config_id:
                 lc_channel = LivechatChannel.browse(config_id)
                 if not lc_channel.exists() or not lc_channel.line_enabled:
@@ -114,6 +114,25 @@ class LineWebhookController(http.Controller):
         # 轉發事件到 LiveChat 模組（軟依賴）
         self._forward_to_livechat(event)
 
+    def _livechat_line_channels(self):
+        """im_livechat.channel (sudo), or None if the LINE bridge fields are absent.
+
+        `line_enabled` / `line_channel_secret` are added to im_livechat.channel
+        by woow_odoo_livechat_line, which this module does not depend on. Stock
+        im_livechat is often installed on its own (website_livechat pulls it
+        in), so checking only that the model exists let the webhook read fields
+        that are not there and crash with a 500.
+
+        Returns None rather than an empty recordset because an empty recordset
+        is falsy, and callers need to tell "unavailable" apart from "no rows".
+        """
+        if 'im_livechat.channel' not in request.env:
+            return None
+        Channel = request.env['im_livechat.channel'].sudo()
+        if 'line_enabled' not in Channel._fields:
+            return None
+        return Channel
+
     def _forward_to_livechat(self, event):
         """轉發 webhook 事件到 LiveChat LINE 模組（如已安裝）
 
@@ -122,10 +141,10 @@ class LineWebhookController(http.Controller):
         bridge 攔截所有請求。因此由 bridge 主動轉發。
         """
         try:
-            if 'im_livechat.channel' not in request.env:
+            LivechatChannel = self._livechat_line_channels()
+            if LivechatChannel is None:
                 return
             # 檢查是否有啟用 LINE 的 LiveChat 頻道
-            LivechatChannel = request.env['im_livechat.channel'].sudo()
             lc_channel = LivechatChannel.search([('line_enabled', '=', True)], limit=1)
             if not lc_channel:
                 return
@@ -420,8 +439,15 @@ class LineWebhookController(http.Controller):
             'locations': '店家位置',
         }
         label = target_labels.get(target, '立即預約')
-        page = target if target in ('news', 'locations') else 'book'
-        url = flex_tmpl._liff_url(page)
+        if target in ('news', 'locations'):
+            url = flex_tmpl._liff_url(target)
+        else:
+            # Booking targets open through the member LIFF redirect bridge.
+            # _liff_url() looks up one LIFF app per page name, and there is no
+            # `liff_id_book`, so it fell back to /liff/book — a route that does
+            # not exist, which handed the customer a 404.
+            url = flex_tmpl._liff_redirect_url(
+                target if target in target_labels else 'book')
 
         request.env['line.api.service'].sudo().reply(reply_token, [{
             'type': 'text',
