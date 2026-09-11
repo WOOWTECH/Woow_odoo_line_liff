@@ -6,7 +6,7 @@ import json
 import logging
 
 from odoo import api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
 
@@ -63,6 +63,17 @@ class LineRichMenu(models.Model):
     # ------------------------------------------------------------------
     # 業務方法
     # ------------------------------------------------------------------
+
+    @api.constrains('size')
+    def _check_areas_fit_the_size(self):
+        """改選單尺寸（例如大改小）時，既有的每一格都要重新落在圖片內"""
+        for menu in self:
+            size = menu._get_size_dict()
+            for area in menu.area_ids:
+                error = area._bounds_error()
+                if error:
+                    raise ValidationError(
+                        f'選單改成 {size["width"]}×{size["height"]} 後，{error}')
 
     def _get_size_dict(self):
         if self.size == 'full':
@@ -356,6 +367,43 @@ class LineRichMenuArea(models.Model):
     action_data = fields.Char('Postback Data (舊)')
     action_richmenu_alias = fields.Char('Alias (舊)')
     action_clipboard_text = fields.Char('複製文字 (舊)')
+
+    @api.constrains('x', 'y', 'width', 'height', 'richmenu_id')
+    def _check_inside_the_menu(self):
+        """每一格都要完整落在選單圖片內。
+
+        LINE 的 API 不檢查這件事：超出圖片的格子照樣會被接受並上線，
+        結果那一格客人點不到（2026-09-11 komibright 實測）。
+        """
+        for area in self:
+            error = area._bounds_error()
+            if error:
+                raise ValidationError(error)
+
+    def _bounds_error(self):
+        """這一格超出選單範圍時回傳一句說明，否則回傳 None"""
+        self.ensure_one()
+        size = self.richmenu_id._get_size_dict()
+        width, height = size['width'], size['height']
+        name = self._position_label()
+        if self.x < 0 or self.y < 0:
+            return f'{name}的位置不能是負數（x {self.x}、y {self.y}）'
+        if self.width <= 0 or self.height <= 0:
+            return f'{name}的寬、高必須大於 0（寬 {self.width}、高 {self.height}）'
+        if self.x + self.width > width:
+            return (f'{name}超出選單範圍：x {self.x} + 寬 {self.width} = '
+                    f'{self.x + self.width}，選單寬 {width}')
+        if self.y + self.height > height:
+            return (f'{name}超出選單範圍：y {self.y} + 高 {self.height} = '
+                    f'{self.y + self.height}，選單高 {height}')
+        return None
+
+    def _position_label(self):
+        """「第 N 格「標籤」」：N 是這一格在選單裡的順序，也是送給 LINE 的順序"""
+        self.ensure_one()
+        area_ids = self.richmenu_id.area_ids.ids
+        position = f'第 {area_ids.index(self.id) + 1} 格' if self.id in area_ids else '這一格'
+        return f'{position}「{self.label}」' if self.label else position
 
     def _get_action_value(self):
         """取得動作值（優先 action_value，向下相容舊欄位）"""
