@@ -1,9 +1,11 @@
 # -*- coding: utf-8 -*-
 # woow_odoo_line_liff/models/line_audience_tag.py
 # LINE Audience 分眾標籤 — Odoo tag + LINE Audience API 同步
+import json
 import logging
 
 from odoo import api, fields, models
+from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
 
@@ -60,24 +62,59 @@ class LineAudienceTag(models.Model):
         if group_id:
             # 新的建立成功後才刪除舊的（LINE 不支援替換全部用戶）；
             # 若先刪除，create 失敗會讓 tag 指向一個已不存在的 audience。
+            leftover = None
             if old_group_id:
-                api.audience_delete(int(old_group_id))
+                ok, status_code, body = api.audience_delete_ex(int(old_group_id))
+                if not ok and status_code != 404:
+                    leftover = (old_group_id, self._line_error_text(status_code, body))
+                    _logger.warning('Audience 同步：舊名單 %s 未能從 LINE 刪除（%s）',
+                                    old_group_id, leftover[1])
             self.write({'line_audience_group_id': str(group_id)})
             _logger.info('Audience 同步成功: %s → %s (%d users)',
                          self.name, group_id, len(user_ids))
+            if leftover:
+                # 新名單已生效；舊名單還在 LINE 上，必須讓操作者知道編號才清得掉
+                return self._notification(
+                    f'已同步 {len(user_ids)} 位用戶到 LINE Audience，但舊名單 {leftover[0]} '
+                    f'未能從 LINE 刪除（{leftover[1]}），請稍後到 LINE 後台刪除。', 'warning')
             return self._notification(
                 f'已同步 {len(user_ids)} 位用戶到 LINE Audience', 'success')
 
         return self._notification('同步失敗，請檢查 Access Token', 'danger')
 
     def action_delete_from_line(self):
-        """從 LINE 刪除 Audience Group"""
+        """從 LINE 刪除 Audience Group
+
+        只有 LINE 真的刪掉才清 group id：失敗時照樣清掉的話，audience 留在 LINE
+        上、Odoo 卻再也指不到它（跟 H-8 的圖文選單孤兒同一類）。
+        """
         self.ensure_one()
+        message = '已從 LINE 刪除'
         if self.line_audience_group_id:
-            self.env['line.api.service'].audience_delete(
+            ok, status_code, body = self.env['line.api.service'].audience_delete_ex(
                 int(self.line_audience_group_id))
+            if status_code == 404:
+                # LINE 上本來就沒有了：舊連結留著只會誤導，清掉即可
+                message = 'LINE 上已不存在這份名單，已清除 Odoo 裡的連結'
+            elif not ok:
+                raise UserError(
+                    f'從 LINE 刪除分眾名單失敗：{self._line_error_text(status_code, body)}。'
+                    '名單仍保留在 LINE 上，Odoo 也保留它的編號，可以稍後再試一次。')
             self.write({'line_audience_group_id': False})
-        return self._notification('已從 LINE 刪除', 'success')
+        return self._notification(message, 'success')
+
+    @staticmethod
+    def _line_error_text(status_code, body):
+        """把 LINE 的錯誤回應（通常是 {"message": "..."}）轉成一句話"""
+        message = ''
+        if body:
+            try:
+                message = json.loads(body).get('message', '')
+            except (ValueError, AttributeError, TypeError):
+                message = body
+        if not status_code:
+            return f'無法連線到 LINE（{message or "網路錯誤"}）'
+        return f'LINE 回應 {status_code}：{message}' if message else f'LINE 回應 {status_code}'
 
     def _notification(self, message, ntype):
         return {

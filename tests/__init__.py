@@ -16,3 +16,4 @@ from . import test_webhook_robustness
 from . import test_webhook_forwarding
 from . import test_auto_reply_regex_dos
 from . import test_liff_login_record
+from . import test_audience_delete_result
