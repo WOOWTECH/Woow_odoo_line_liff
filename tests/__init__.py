@@ -19,3 +19,4 @@ from . import test_liff_login_record
 from . import test_audience_delete_result
 from . import test_richmenu_area_bounds
 from . import test_richmenu_error_details
+from . import test_news_narrowcast_message
