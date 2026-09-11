@@ -50,11 +50,19 @@ class MailNotificationLine(models.Model):
                     continue
 
                 msg = notif.mail_message_id
-                if not msg or msg.id in seen_messages:
+                if not msg:
                     continue
 
                 partner = notif.res_partner_id
                 if not partner:
+                    continue
+
+                # Key on (message, partner), not just message: otherwise the
+                # second LINE-bound partner notified about the same message
+                # is skipped because a different partner already "used up"
+                # this message id.
+                dedupe_key = (msg.id, partner.id)
+                if dedupe_key in seen_messages:
                     continue
 
                 line_users = LineUser.search([
@@ -65,7 +73,7 @@ class MailNotificationLine(models.Model):
                 if not line_users:
                     continue
 
-                seen_messages.add(msg.id)
+                seen_messages.add(dedupe_key)
 
                 flex, alt_text = factory.build_tracking_notification(msg, partner)
                 if not flex:
