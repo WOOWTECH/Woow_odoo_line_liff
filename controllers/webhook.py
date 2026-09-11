@@ -6,8 +6,19 @@ import json
 import logging
 import re
 
+import psycopg2
+
 from odoo import http
 from odoo.http import request, Response
+
+# 併發錯誤：讓它們往外傳播，讓 Odoo 的請求層重試整個 request，
+# 而不是在這裡吞掉（吞掉會關閉 Odoo 內建的交易重試）。
+_CONCURRENCY_ERRORS = (psycopg2.errors.SerializationFailure,
+                       psycopg2.errors.LockNotAvailable)
+
+# H-19：fed to a regex at match time. Caps worst-case backtracking input size
+# even for a pattern that looked safe at save time.
+_MAX_REGEX_MATCH_TEXT = 500
 
 _logger = logging.getLogger(__name__)
 
@@ -87,32 +98,51 @@ class LineWebhookController(http.Controller):
             _logger.warning('Webhook payload 解析失敗')
             return Response('Invalid JSON', status=400)
 
-        # 處理事件
+        # 處理事件：每個 event 各自一個 savepoint，one bad event 不能拖垮
+        # 同一個 delivery 裡其他 event 的效果。
         events = payload.get('events', [])
         for event in events:
-            try:
-                self._process_event(event)
-            except Exception:
-                _logger.exception('Webhook 事件處理失敗: %s', event.get('type'))
+            self._process_event(event)
 
         return Response('OK', status=200)
 
     def _process_event(self, event):
-        """分派處理單一 Webhook 事件"""
+        """分派處理單一 Webhook 事件
+
+        Log 建立 + handler 執行包在同一個 savepoint：成功就把 log 標記為
+        processed，失敗就整個回滾（含 log 本身），然後在回滾*之後*另外補一筆
+        帶 error_msg 的 log，讓錯誤不會隨著回滾一起消失。
+        轉發到 LiveChat 是獨立的第二個 savepoint：無論上面 handler 成功與否都
+        會執行，它自己的失敗也不能影響 handler 那一半已經確定的結果。
+        併發類錯誤（serialization failure / lock not available）兩段都直接
+        往外拋，讓 Odoo 重試整個 request。
+        """
         event_type = event.get('type', '')
         source = event.get('source', {})
         line_uid = source.get('userId', '')
 
-        self._log_event(event, event_type, line_uid)
+        try:
+            with request.env.cr.savepoint():
+                log = self._log_event(event, event_type, line_uid)
+                handler = getattr(self, f'_handle_{event_type}', None)
+                if handler:
+                    handler(event, line_uid)
+                else:
+                    _logger.debug('未處理的事件類型: %s', event_type)
+                log.write({'processed': True})
+        except _CONCURRENCY_ERRORS:
+            raise
+        except Exception as exc:
+            _logger.exception('Webhook 事件處理失敗: %s', event_type)
+            self._log_event_error(event, event_type, line_uid, exc)
 
-        handler = getattr(self, f'_handle_{event_type}', None)
-        if handler:
-            handler(event, line_uid)
-        else:
-            _logger.debug('未處理的事件類型: %s', event_type)
-
-        # 轉發事件到 LiveChat 模組（軟依賴）
-        self._forward_to_livechat(event)
+        try:
+            with request.env.cr.savepoint():
+                self._forward_to_livechat(event)
+        except _CONCURRENCY_ERRORS:
+            raise
+        except Exception:
+            _logger.warning('LiveChat 轉發失敗', exc_info=True)
 
     def _livechat_line_channels(self):
         """im_livechat.channel (sudo), or None if the LINE bridge fields are absent.
@@ -139,30 +169,35 @@ class LineWebhookController(http.Controller):
         解決路由衝突：bridge 的 /line/webhook/<int:config_id> 與
         livechat 的 /line/webhook/<int:channel_id> 共用同一模式，
         bridge 攔截所有請求。因此由 bridge 主動轉發。
+
+        H-5：無論 liff 這邊的 handler 有沒有成功都要跑（呼叫端已經把這個方法
+        跟 handler 放在不同的 savepoint 裡）。這裡不吞自己的例外——讓呼叫端
+        的 savepoint 接手回滾，並在 WARNING 記錄失敗，而不是像以前一樣用
+        debug（正式環境看不到）或直接 pass 掉 ImportError。
         """
+        LivechatChannel = self._livechat_line_channels()
+        if LivechatChannel is None:
+            return
+        # 檢查是否有啟用 LINE 的 LiveChat 頻道
+        lc_channel = LivechatChannel.search([('line_enabled', '=', True)], limit=1)
+        if not lc_channel:
+            return
+        # 動態載入 LiveChat 控制器（避免硬依賴）
         try:
-            LivechatChannel = self._livechat_line_channels()
-            if LivechatChannel is None:
-                return
-            # 檢查是否有啟用 LINE 的 LiveChat 頻道
-            lc_channel = LivechatChannel.search([('line_enabled', '=', True)], limit=1)
-            if not lc_channel:
-                return
-            # 動態載入 LiveChat 控制器（避免硬依賴）
             from odoo.addons.woow_odoo_livechat_line.controllers.webhook import (
                 LineWebhookController as LCController,
             )
-            LCController()._process_event(event, lc_channel)
         except ImportError:
-            pass
-        except Exception:
-            _logger.debug('LiveChat 轉發失敗', exc_info=True)
+            return
+        LCController()._process_event(event, lc_channel)
 
-    def _log_event(self, event, event_type, line_uid):
-        """記錄 Webhook 事件到 line.event.log"""
-        EventLog = request.env['line.event.log'].sudo()
+    def _event_log_vals(self, event, event_type, line_uid):
+        """組出建立 line.event.log 所需的欄位值（不含 processed / error_msg）。
+
+        回傳 (line_user, vals)。抽出來讓 _log_event（正常路徑）跟
+        _log_event_error（savepoint 回滾後的錯誤補記）共用同一套邏輯。
+        """
         LineUser = request.env['line.user'].sudo()
-
         line_user = LineUser.find_by_line_uid(line_uid) if line_uid else LineUser
 
         message_type = False
@@ -182,21 +217,52 @@ class LineWebhookController(http.Controller):
         log_event_type = event_type if event_type in valid_event_types else 'other'
 
         config = getattr(request, '_line_config', None)
-        try:
-            EventLog.create({
-                'config_id': config.id if config else False,
-                'line_user_id': line_user.id if line_user else False,
-                'event_type': log_event_type,
-                'message_type': message_type,
-                'raw_payload': json.dumps(event, ensure_ascii=False),
-                'text_content': text_content[:255] if text_content else False,
-                'processed': True,
-            })
+        vals = {
+            'config_id': config.id if config else False,
+            'line_user_id': line_user.id if line_user else False,
+            'event_type': log_event_type,
+            'message_type': message_type,
+            'raw_payload': json.dumps(event, ensure_ascii=False),
+            'text_content': text_content[:255] if text_content else False,
+        }
+        return line_user, vals
 
-            if line_user:
-                line_user.write({'event_count': line_user.event_count + 1})
-        except Exception:
-            _logger.exception('記錄 Webhook 事件失敗')
+    def _bump_event_count(self, line_user):
+        """H-3：event_count + 1 是 SQL 層的原子 UPDATE，而不是 ORM 的
+        read-modify-write（並發事件不會互相蓋掉彼此的計數）。"""
+        if not line_user:
+            return
+        request.env.flush_all()
+        request.env.cr.execute(
+            'UPDATE line_user SET event_count = event_count + 1 WHERE id = %s',
+            (line_user.id,),
+        )
+        line_user.invalidate_recordset(['event_count'])
+
+    def _log_event(self, event, event_type, line_uid):
+        """記錄 Webhook 事件到 line.event.log，回傳新建立的記錄。
+
+        H-4：一開始 processed=False；呼叫端在 handler 成功後才把它設成 True。
+        DB 層的例外（若有）會往外傳播，由呼叫端的 savepoint 接手。
+        """
+        EventLog = request.env['line.event.log'].sudo()
+        line_user, vals = self._event_log_vals(event, event_type, line_uid)
+        vals['processed'] = False
+        log = EventLog.create(vals)
+        self._bump_event_count(line_user)
+        return log
+
+    def _log_event_error(self, event, event_type, line_uid, exc):
+        """H-3/H-4：這個事件的 savepoint 已經回滾（含它原本的 log 列），
+        在回滾*之後*另外補一筆帶 error_msg 的記錄，讓錯誤不會被一起吞掉。
+        只記錄例外類別與訊息，不記錄原始 payload/文字內容。
+        """
+        EventLog = request.env['line.event.log'].sudo()
+        line_user, vals = self._event_log_vals(event, event_type, line_uid)
+        vals['processed'] = False
+        vals['error_msg'] = f'{type(exc).__name__}: {exc}'
+        EventLog.create(vals)
+        self._bump_event_count(line_user)
 
     # ------------------------------------------------------------------
     # 事件處理器
@@ -493,8 +559,15 @@ class LineWebhookController(http.Controller):
             elif rule.match_type == 'exact':
                 matched = kw == text_lower
             elif rule.match_type == 'regex':
+                # H-19：@api.constrains 只擋得到「之後」新存的規則；存在較舊
+                # 資料裡的危險 pattern 要在真的拿去跑 re.search 之前再擋一次。
+                if not rule._is_safe_regex():
+                    _logger.warning(
+                        '略過不安全的正規表達式自動回覆規則 id=%s', rule.id)
+                    continue
                 try:
-                    matched = bool(re.search(rule.keyword, text, re.IGNORECASE))
+                    matched = bool(re.search(
+                        rule.keyword, text[:_MAX_REGEX_MATCH_TEXT], re.IGNORECASE))
                 except re.error:
                     continue
 

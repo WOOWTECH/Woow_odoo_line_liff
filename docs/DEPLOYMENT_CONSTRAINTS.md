@@ -4,7 +4,7 @@
 的能力——但如果客戶的期待超出這裡寫的範圍，就會在正式營運中出事，而且多半是靜默
 出事。**簽約與導入前請逐項確認。**
 
-最後更新：2026-09-10（部署前稽核修復後）
+最後更新：2026-09-10（18.0.3.2.2：H 類修復與 iPad 實機測試之後）
 
 ---
 
@@ -100,18 +100,53 @@ bridge controller 主動轉發來繞過，且該路徑沒有任何測試覆蓋�
 
 ## 6. 其他需要在導入時說明的行為
 
-- **`match_type='regex'` 的自動回覆有 DoS 風險**：pattern 直接執行、無逾時、無長度
-  上限，且位於 webhook 的同步請求內。一則精心構造的訊息即可吃滿 worker（實測
-  `(a+)+b` 對 26 個 a 需 38.5 秒），匿名可觸發。**SOP：禁止使用 regex 類型。**
-- **webhook 沒有冪等處理**：不檢查 `message.id` 與 `deliveryContext.isRedelivery`。
-  請確認客戶的 LINE Console **未開啟** webhook redelivery，否則重送會造成重複訊息、
-  重複附件、自動回覆重複觸發。
-- **媒體下載沒有大小上限**且為同步：客戶傳送大型影片會造成 worker 記憶體暴衝與
-  webhook 逾時。請告知客戶勿在 LINE 傳大檔。
+- **`match_type='regex'` 的自動回覆仍不建議使用**：18.0.3.2.2 起存檔時會擋下常見的
+  災難性寫法（巢狀量詞 `(x+)+`、量詞下的交替 `(x|xy)+`、反向引用、超過 200 字），
+  比對時對舊資料再檢查一次，且只拿訊息前 500 字去比對。但這是靜態啟發式檢查，
+  Python `re` 沒有逾時，**擋不住所有寫法**（例如多層括號 `((a+))+` 會漏網）。
+  **SOP：優先用 contains / exact；非用 regex 不可時由我方審核 pattern。**
+- **webhook 重送已冪等**（18.0.3.2.2）：同一個 `message.id` 在同一個對話裡只會建立
+  一則訊息與一份附件（每個對話記住最近 200 個 id）。
+- **客戶傳入的媒體有大小上限**（18.0.3.2.2）：預設 50 MB，可用
+  `ir.config_parameter` 的 `woow_line_base.content_max_mb` 調整。超過上限的檔案不會
+  下載，客服在 Discuss 看到的是「[Video - download failed]」這類提示，需請客戶改用
+  其他方式提供。下載仍是同步執行，上限內的大檔仍會拖慢該次 webhook。
 - **`web.base.url.freeze` 必須設為 True**：否則任何管理員用不同 hostname 登入一次就會
   覆寫 `web.base.url`，之後所有 Flex 圖片與按鈕連結都會指向 LINE 連不到的位址
-  （Flex 圖片強制 https，非 https 直接不顯示）。
-- **出向音訊的長度是寫死的 60 秒**，與實際音檔長度無關。
+  （Flex 圖片強制 https，非 https 直接不顯示）。（2026-09-10 五台皆已設定。）
+- **出向音訊的長度是寫死的 60 秒**，與實際音檔長度無關。實機驗證：一段 1 分 9 秒的
+  錄音，客戶端顯示為「1分鐘0秒」。要修需要音訊解析套件，目前不做。
+- **出向影片的預覽圖是固定的灰底播放鍵**（`static/img/video_preview.png`），不是
+  影片的第一格畫面。影片本身可以正常播放。
+- **Broadcast 不會排除「關閉通知」的好友**（LINE 平台對全體好友發送，無法過濾），
+  但 broadcast 因配額 429 降級成 multicast 時會排除他們——同一個按鈕的實際收件範圍
+  隨配額狀態改變（H-15）。**SOP：尊重退訂的推播一律用 multicast / narrowcast。**
+
+---
+
+## 7. LINE 官方帳號後台（OA Manager）必須配合的設定
+
+這幾項不在 Odoo 裡，Odoo 無法代設，**導入時要在 manager.line.biz 逐項確認**：
+
+- **開 LINE 客服時，「回應設定 → 自動回應訊息」必須關閉**，Webhook 保持開啟。否則客戶
+  每傳一則訊息，LINE 都會先自動回「很抱歉，本帳號無法個別回覆用戶的訊息」，與客服
+  相矛盾。2026-09-10 實測 KomiBright、璞旭工程兩個帳號都還開著。
+- **iPad 版 LINE 不顯示圖文選單（Rich Menu）**。只靠選單當入口的功能（預約、最新消息
+  等）在 iPad 上找不到，需要另外提供入口：歡迎訊息內的連結、關鍵字自動回覆。
+- **未認證的官方帳號**會在聊天室頂端對客戶顯示「尚未經過認證…若涉及個資收集、投資交易
+  或金錢，請務必提高警覺」的警示橫幅。有收個資或金流的客戶建議申請認證。
+- **預約按鈕的目的地是每個租戶自己設定的**：`line.liff.config.rebook_path`，未設定時
+  安全預設為 `/my/home`（不再寫死 `/appointment/1/schedule`）。沒有設定檔的租戶
+  （例如 evergreen）永遠走預設值。
+
+---
+
+## 8. 同一組 LINE 憑證存在三個地方
+
+`ir.config_parameter`（`woow_line_base.*`）、`line.liff.config`、
+`im_livechat.channel`（LINE 客服頻道）各存一份 Channel ID / Secret。**更換（rotate）
+Channel Secret 或 Access Token 時三處都要改**，漏改其中一處會讓對應的功能（送訊、
+LIFF 登入、客服轉發）靜默失效。合併成單一來源屬設計層工作，目前不做（B-8）。
 
 ---
 
@@ -127,3 +162,9 @@ bridge controller 主動轉發來繞過，且該路徑沒有任何測試覆蓋�
 4. 確認 `woow_line_base.login_channel_id` 有值。`verify_access_token` 現在會比對
    `client_id` 且**取不到設定時 fail closed**，所以這個參數為空會讓 LIFF 的
    access-token 登入全數失敗。
+5. **18.0.3.2.2 起三個模組要一起升級**：liff 的 Rich Menu 修復呼叫 base 新增的
+   `richmenu_create_ex` / `richmenu_delete_ex`，只升 liff 不升 base 會在按
+   「重新上傳」「封存」時出錯；livechat 在 `discuss_channel` 新增一個欄位
+   （`line_processed_message_ids`），升級時會自動加欄位，不需要手動 migration。
+6. 升級後 `line.event.log` 的「有錯誤」篩選器開始會有資料（以前永遠是空的）——
+   這是修好了，不是出事了。

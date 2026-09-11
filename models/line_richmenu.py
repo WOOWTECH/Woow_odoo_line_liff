@@ -2,6 +2,7 @@
 # woow_odoo_line_liff/models/line_richmenu.py
 # Rich Menu 管理 — 建立/上傳/綁定/刪除/Tab 切換
 import base64
+import json
 import logging
 
 from odoo import api, fields, models
@@ -89,9 +90,23 @@ class LineRichMenu(models.Model):
             'areas': areas,
         }
 
-    def action_create_on_line(self):
-        """建立 Rich Menu + 上傳圖片到 LINE"""
-        self.ensure_one()
+    def _line_error_message(self, status_code, body):
+        """把 LINE 回傳的錯誤 body（通常是 {"message": "..."}）轉成訊息文字"""
+        message = ''
+        if body:
+            try:
+                message = json.loads(body).get('message', '')
+            except (ValueError, AttributeError, TypeError):
+                message = body
+        return f'{message}（HTTP {status_code}）' if message else f'HTTP {status_code}'
+
+    def _build_and_upload_to_line(self):
+        """在 LINE 建立新選單並上傳圖片，回傳新的 richMenuId。
+
+        H-7：不會動到 self 現有的 line_richmenu_id / state — 呼叫端決定新選單
+        建好之後才切換過去，也才可以刪掉舊選單。失敗時清掉已建立的部份（若
+        有），並拋出帶 LINE 實際錯誤訊息的 UserError。
+        """
         if not self.area_ids:
             raise UserError('請至少定義一個觸按區域')
         if not self.image:
@@ -101,9 +116,10 @@ class LineRichMenu(models.Model):
 
         # 建立
         menu_data = self._build_menu_data()
-        richmenu_id = api.richmenu_create(menu_data)
+        richmenu_id, status_code, body = api.richmenu_create_ex(menu_data)
         if not richmenu_id:
-            raise UserError('LINE Rich Menu 建立失敗，請檢查 API 金鑰')
+            raise UserError(
+                f'LINE Rich Menu 建立失敗：{self._line_error_message(status_code, body)}')
 
         # 上傳圖片
         image_data = base64.b64decode(self.image)
@@ -113,16 +129,13 @@ class LineRichMenu(models.Model):
 
         success = api.richmenu_upload_image(richmenu_id, image_data, content_type)
         if not success:
-            # 清理已建立的 menu
+            # 清理已建立的 menu，不留半成品在 LINE 上
             api.richmenu_delete(richmenu_id)
             raise UserError('圖片上傳失敗，請確認圖片尺寸符合要求')
 
-        self.write({
-            'line_richmenu_id': richmenu_id,
-            'state': 'uploaded',
-        })
-        _logger.info('Rich Menu 建立成功: %s → %s', self.name, richmenu_id)
+        return richmenu_id
 
+    def _upload_success_notification(self, richmenu_id):
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
@@ -133,12 +146,30 @@ class LineRichMenu(models.Model):
             },
         }
 
+    def action_create_on_line(self):
+        """建立 Rich Menu + 上傳圖片到 LINE"""
+        self.ensure_one()
+        richmenu_id = self._build_and_upload_to_line()
+        self.write({
+            'line_richmenu_id': richmenu_id,
+            'state': 'uploaded',
+        })
+        _logger.info('Rich Menu 建立成功: %s → %s', self.name, richmenu_id)
+        return self._upload_success_notification(richmenu_id)
+
     def action_reupload_to_line(self):
-        """重新上傳 Rich Menu 到 LINE（刪除舊的 → 建立新的 → 重新綁定用戶）"""
+        """重新上傳 Rich Menu 到 LINE（先建好新的 → 成功後才刪舊的 → 重新綁定用戶）
+
+        H-7：舊版先刪 LINE 上的選單再重建；重建失敗（tap area 不合法、圖片
+        太大或比例不對）時 Odoo 會 rollback，但 LINE 上的刪除沒辦法復原——
+        結果是所有好友都失去選單，Odoo 卻還顯示為啟用中。新順序：新選單建好
+        （create → 上傳圖片 → 設預設/別名）才刪舊的；建立失敗就保留舊選單原
+        封不動，並把 LINE 的實際錯誤訊息秀給使用者。
+        """
         self.ensure_one()
         api = self.env['line.api.service']
 
-        # 記住之前的狀態
+        old_richmenu_id = self.line_richmenu_id
         was_default = self.is_default
         # 找出所有綁定此 Rich Menu 的用戶（reupload 後需要重新綁定）
         linked_users = self.env['line.user'].search([
@@ -147,30 +178,35 @@ class LineRichMenu(models.Model):
             ('line_user_id', '!=', False),
         ])
 
-        # 刪除 LINE 上的舊選單
-        if self.line_richmenu_id:
-            api.richmenu_delete(self.line_richmenu_id)
-            self.write({'state': 'draft', 'line_richmenu_id': False, 'is_default': False})
-            _logger.info('Rich Menu 已刪除舊版: %s', self.line_richmenu_id)
+        # 先建好新的；失敗會拋 UserError，這裡完全沒動到舊選單
+        new_richmenu_id = self._build_and_upload_to_line()
 
-        # 重新建立
-        result = self.action_create_on_line()
+        self.write({
+            'line_richmenu_id': new_richmenu_id,
+            'state': 'uploaded',
+            'is_default': False,
+        })
 
         # 如果之前是預設，自動重設為預設
-        if was_default and self.line_richmenu_id:
+        if was_default:
             self.action_set_as_default()
 
         # 重新綁定所有之前指定的用戶
-        if linked_users and self.line_richmenu_id:
+        if linked_users:
             uids = linked_users.mapped('line_user_id')
             for i in range(0, len(uids), 500):
                 batch = uids[i:i + 500]
-                api.richmenu_link_to_users(self.line_richmenu_id, batch)
+                api.richmenu_link_to_users(new_richmenu_id, batch)
             _logger.info(
                 'Rich Menu reupload: 重新綁定 %d 位用戶 → %s',
                 len(uids), self.name)
 
-        return result
+        # 新選單已經生效，這時候才刪舊的
+        if old_richmenu_id:
+            api.richmenu_delete(old_richmenu_id)
+            _logger.info('Rich Menu 已刪除舊版: %s', old_richmenu_id)
+
+        return self._upload_success_notification(new_richmenu_id)
 
     def action_set_as_default(self):
         """設為所有用戶的預設選單"""
@@ -212,6 +248,20 @@ class LineRichMenu(models.Model):
             },
         }
 
+    def _delete_on_line_or_raise(self, richmenu_id):
+        """刪除 LINE 上的 Rich Menu；200 或 404（已經不存在）視為成功。
+
+        H-8：舊版把刪除結果丟掉，導致刪不掉的選單留在 LINE 上，佔掉
+        1000 個選單的額度卻再也管不到。失敗時拋出 UserError，讓呼叫端保留
+        記錄與其 LINE 連結不變。
+        """
+        api = self.env['line.api.service']
+        ok, status_code, body = api.richmenu_delete_ex(richmenu_id)
+        if ok or status_code == 404:
+            return
+        raise UserError(
+            f'刪除 LINE Rich Menu 失敗：{self._line_error_message(status_code, body)}')
+
     def action_archive(self):
         """從 LINE 刪除並封存"""
         self.ensure_one()
@@ -219,12 +269,22 @@ class LineRichMenu(models.Model):
             api = self.env['line.api.service']
             if self.is_default:
                 api.richmenu_clear_default()
-            api.richmenu_delete(self.line_richmenu_id)
+            self._delete_on_line_or_raise(self.line_richmenu_id)
         self.write({
             'state': 'archived',
             'is_default': False,
             'line_richmenu_id': False,
         })
+
+    def unlink(self):
+        """刪除前先刪 LINE 上的選單；刪不掉就整批拒絕，記錄與其 LINE 連結不變
+
+        H-8：管理員原本可以直接刪除記錄，LINE 上的選單完全沒被清掉。
+        """
+        for menu in self:
+            if menu.line_richmenu_id:
+                menu._delete_on_line_or_raise(menu.line_richmenu_id)
+        return super().unlink()
 
     def action_preview(self):
         """綁定到管理員自己的 LINE 預覽"""

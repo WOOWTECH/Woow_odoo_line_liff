@@ -455,7 +455,7 @@ _SYNC_FIELDS = {
 | `action_publish()` | Set state to `published` |
 | `action_draft()` | Revert to draft |
 | `action_push_to_line()` | Build Flex card and push via selected method |
-| `_execute_push(messages, method)` | Execute push; returns `(success, sent_count, actual_method)` |
+| `_execute_push(messages, method)` | Execute push; returns `(success, sent_count, actual_method, error_detail)` |
 | `_get_push_targets()` | Get target `line.user` recordset (explicit or all followers) |
 
 #### Push Methods
