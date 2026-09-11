@@ -6,3 +6,4 @@ from . import test_webhook
 from . import test_security_fixes
 from . import test_attack_surface
 from . import test_richmenu_postback
+from . import test_webhook_without_livechat_line

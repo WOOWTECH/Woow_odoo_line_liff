@@ -22,6 +22,28 @@ on:
 jobs:
   odoo-tests:
     runs-on: ubuntu-latest
+    name: odoo-tests (${{ matrix.state }})
+
+    # Two install states, because the bridge between this module and LiveChat
+    # is where a real crash lived and neither state alone can see both sides:
+    #  - stock-livechat: im_livechat present WITHOUT woow_odoo_livechat_line.
+    #    Very common (website_livechat pulls im_livechat in). The webhook used
+    #    to read LINE-only fields that do not exist in this state and 500.
+    #  - with-line-livechat: all three installed, the production config of the
+    #    tenants that run LINE customer service. The fallback to a LiveChat
+    #    channel's secret has to keep working here.
+    # Tests that need one state skip in the other, so each state has its own
+    # floor for the "did the suite actually run" guard.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - state: stock-livechat
+            modules: "woow_line_base,woow_odoo_line_liff,im_livechat"
+            min_tests: "33"
+          - state: with-line-livechat
+            modules: "woow_line_base,woow_odoo_line_liff,woow_odoo_livechat_line"
+            min_tests: "33"
     container:
       image: odoo:18
       options: --user root
@@ -42,8 +64,8 @@ jobs:
     env:
       # Bump when adding a test class, so an import that silently stops
       # collecting is caught instead of passing as a green build.
-      MIN_TESTS: "25"
-      MODULES: "woow_line_base,woow_odoo_line_liff"
+      MIN_TESTS: ${{ matrix.min_tests }}
+      MODULES: ${{ matrix.modules }}
       TESTED: "line_ci/woow_odoo_line_liff"
 
     defaults:
@@ -70,6 +92,11 @@ jobs:
           repository: WOOWTECH/woow_line_base
           path: addons/woow_line_base
 
+      - name: Check out woow_odoo_livechat_line (installed only in with-line-livechat)
+        uses: actions/checkout@v4
+        with:
+          repository: WOOWTECH/woow_odoo_livechat_line
+          path: addons/woow_odoo_livechat_line
 
       - name: Install into a fresh database
         run: |
