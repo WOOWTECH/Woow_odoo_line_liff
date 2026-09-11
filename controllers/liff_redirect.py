@@ -206,9 +206,11 @@ class LiffRedirectController(http.Controller):
             # （目前設 15 分鐘），避免免密碼 session 被無限期拿來跳過
             # 改密碼的舊密碼檢查、或連帶改掉 login。
             request.session.liff_authenticated_at = time.time()
-            # 更新 last login 紀錄（authenticate() 原本會做）
-            # 用 SUPERUSER env 直接 create，帶上 create_uid 讓 login_date related 正確
-            su_env['res.users.log'].create({'create_uid': fresh_user.id})
+            # 更新 last login 紀錄（authenticate() 原本會做）。一定要以客人
+            # 本人的身分寫：Odoo 會丟掉 create() 裡明確指定的 create_uid，改填
+            # 目前 env 的使用者，所以用 SUPERUSER env 寫會全部記成 OdooBot，
+            # 客人的 login_date 永遠不會更新。
+            fresh_user.with_user(fresh_user)._update_last_login()
             request.env.cr.commit()
         except Exception:
             _logger.exception('liff_redirect: passwordless session 建立失敗')
@@ -220,8 +222,13 @@ class LiffRedirectController(http.Controller):
     # 路由
     # ------------------------------------------------------------------
 
+    # readonly=False：Odoo 18 把 auth='none' 路由預設成唯讀交易，但 POST 會建立
+    # LINE 用戶與 portal user、寫登入紀錄。唯讀交易裡的寫入會被上面
+    # _authenticate_liff_user 的 except 吞掉，Odoo 的「改用讀寫重試」因此不會
+    # 發生，整個請求變成 500（有唯讀副本或測試環境時必定發作）。
     @http.route(['/liff/redirect', '/liff/redirect/<path:target>'], type='http',
-                auth='none', methods=['GET', 'POST'], website=False, csrf=False)
+                auth='none', methods=['GET', 'POST'], website=False, csrf=False,
+                readonly=False)
     def liff_redirect(self, target='book', **kwargs):
         """LIFF 自動登入跳轉端點
 
@@ -244,7 +251,8 @@ class LiffRedirectController(http.Controller):
         return request.redirect(redirect_url)
 
     @http.route('/liff/redirect/booking/<int:booking_id>', type='http',
-                auth='none', methods=['GET', 'POST'], website=False, csrf=False)
+                auth='none', methods=['GET', 'POST'], website=False, csrf=False,
+                readonly=False)
     def liff_redirect_booking(self, booking_id, **kwargs):
         """LIFF 跳轉到特定預約詳情"""
         if request.httprequest.method == 'GET':
