@@ -268,22 +268,25 @@ class LineRichMenu(models.Model):
 
         api = self.env['line.api.service']
 
-        # 取消其他預設
-        for other in self.search([('is_default', '=', True), ('id', '!=', self.id)]):
-            other.write({'is_default': False, 'state': 'uploaded'})
-
+        # LINE 成功前不可先改本地預設旗標；否則失敗時 Odoo 會顯示錯誤的
+        # 預設選單，且 XML-RPC 呼叫端還可能收到 None。
         success = api.richmenu_set_default(self.line_richmenu_id)
         if not success:
             raise UserError('設定預設 Rich Menu 失敗')
 
+        for other in self.search([('is_default', '=', True), ('id', '!=', self.id)]):
+            other.write({'is_default': False, 'state': 'uploaded'})
         self.write({'is_default': True, 'state': 'active'})
+        return True
 
     def action_clear_default(self):
-        """取消預設"""
+        """取消預設；僅在 LINE 成功後同步本地狀態。"""
         self.ensure_one()
         api = self.env['line.api.service']
-        api.richmenu_clear_default()
+        if not api.richmenu_clear_default():
+            raise UserError('取消預設 Rich Menu 失敗')
         self.write({'is_default': False, 'state': 'uploaded'})
+        return True
 
     def action_link_to_users(self):
         """綁定到選定的 LINE 用戶（打開選擇視窗）"""
@@ -315,18 +318,19 @@ class LineRichMenu(models.Model):
             f'刪除 LINE Rich Menu 失敗：{self._line_error_message(status_code, body)}')
 
     def action_archive(self):
-        """從 LINE 刪除並封存"""
+        """從 LINE 刪除並封存；所有 LINE 步驟成功後才變更本地記錄。"""
         self.ensure_one()
         if self.line_richmenu_id:
             api = self.env['line.api.service']
-            if self.is_default:
-                api.richmenu_clear_default()
+            if self.is_default and not api.richmenu_clear_default():
+                raise UserError('取消預設 Rich Menu 失敗，未封存本地選單')
             self._delete_on_line_or_raise(self.line_richmenu_id)
         self.write({
             'state': 'archived',
             'is_default': False,
             'line_richmenu_id': False,
         })
+        return True
 
     def unlink(self):
         """刪除前先刪 LINE 上的選單；刪不掉就整批拒絕，記錄與其 LINE 連結不變

@@ -72,7 +72,7 @@ class TestNotificationCardSummary(TransactionCase):
         with patch(MOCK_POST, return_value=MagicMock(status_code=200, text='{}')) as post:
             self.env['calendar.event'].create({
                 'name': '筋膜整復 60 分',
-                'start': '2026-09-15 08:00:00', 'stop': '2026-09-15 09:00:00',
+                'start': '2099-09-15 08:00:00', 'stop': '2099-09-15 09:00:00',
                 'partner_ids': [(6, 0, self.customer.ids)],
             })
         cards = self._cards_pushed_to_the_customer(post)

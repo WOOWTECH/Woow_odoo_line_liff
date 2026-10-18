@@ -22,3 +22,5 @@ from . import test_richmenu_error_details
 from . import test_news_narrowcast_message
 from . import test_liff_clear_session
 from . import test_notification_card_summary
+from . import test_liff_login_hardening
+from . import test_push_log_and_insight

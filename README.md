@@ -821,14 +821,27 @@ This is the most critical controller -- it enables seamless authentication from 
 
 | Target | Portal URL |
 |--------|-----------|
-| `book` | `/appointment/1/schedule` |
+| `book` | `line.liff.config.rebook_path` if it is a safe local path, else `/my/home` |
 | `my-bookings` | `/my/ext-bookings` |
 | `profile` | `/my/account` |
 | `home` | `/my/home` |
 | `orders` | `/my/orders` |
 | `invoices` | `/my/invoices` |
 | `booking/<id>` | `/my/ext-bookings/<id>` |
-| `my/*`, `shop*`, `appointment/*`, `contactus` | `/<target>` (pass-through) |
+| any other `a/b/...` path | `/<target>` (pass-through) |
+
+A target may only contain `A-Z a-z 0-9 _ -` segments separated by single `/`
+(max 64 chars); anything else returns 404 on the bridge page.
+
+#### Per-site settings (`ir.config_parameter`, all empty by default)
+
+A site that sets none of these behaves like a plain portal login.
+
+| Key | Format | Effect |
+|-----|--------|--------|
+| `woow_odoo_line_liff.internal_sso_bindings` | JSON list of `{subject, enabled, config_id, login_channel_id, line_user_id, partner_id, user_id}` | A LINE user listed here (verified ID Token only) logs in as that **internal** user. Admins (`base.group_system`) and mismatched records are refused; a disabled or malformed binding refuses the login instead of falling back to portal. Users with MFA are sent to the normal login page. |
+| `woow_odoo_line_liff.internal_sso_admin_targets` | JSON object `{"<target>": "/local/path"}` | Backend entry points for Rich Menu buttons. A bound user goes straight there; anyone else is logged out and sent to `/web/login?redirect=<path>`. One invalid entry disables the whole map. |
+| `woow_odoo_line_liff.booking_resume_path` + `woow_odoo_line_liff.booking_intent_session_key` | local path / session key | Lets a booking module resume a draft after LIFF login: `book` with a server-issued `booking_nonce` goes to `<path>?booking_nonce=...`, and only that one draft is kept across the session rotation. Both keys must be set. |
 
 #### Authentication Flow
 
@@ -1037,6 +1050,8 @@ The LIFF login flow accepts a LINE ID Token (JWT) and verifies it via `POST http
 - The ID Token is submitted via **POST body** (not URL query parameters), reducing exposure in browser history, referrer headers, and server access logs.
 - The LIFF bridge page extracts the token client-side and immediately POSTs it; the token is never persisted in `localStorage` or cookies.
 - After successful authentication, an Odoo session cookie is issued -- the ID Token is not reused for subsequent requests.
+- The bridge page issues a one-time `login_state` (10 minutes, bound to the target and LINE config, kept in the server session). The POST must return it; a missing, expired or reused value is refused with 400, so a token captured elsewhere cannot be posted into another browser's session.
+- An existing Odoo cookie never skips LINE verification (a shared phone may hold someone else's session). Every successful LIFF login rotates the session through Odoo's normal `finalize()` path.
 
 **Remaining risk**: Within the token's validity window (before `exp`), a man-in-the-middle on the client device could replay the token. HTTPS mitigates network-level interception.
 
