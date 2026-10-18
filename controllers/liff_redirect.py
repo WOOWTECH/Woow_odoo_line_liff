@@ -13,8 +13,9 @@ from odoo import http, SUPERUSER_ID
 from odoo.http import request
 from urllib.parse import urlencode
 from .liff_sso_policy import (
-    ADMIN_TARGETS, BINDING_PARAM, BOOKING_KEY, allowed_target,
-    binding_for_claims, consume_challenge, issue_challenge,
+    ADMIN_TARGETS_PARAM, BINDING_PARAM, BOOKING_INTENT_KEY_PARAM, BOOKING_RESUME_PATH_PARAM,
+    allowed_target, binding_for_claims, consume_challenge, is_safe_local_path,
+    issue_challenge, parse_admin_targets, parse_booking_resume,
 )
 
 _logger = logging.getLogger(__name__)
@@ -99,6 +100,28 @@ class LiffRedirectController(http.Controller):
             return booking_nonce
         return None
 
+    def _get_admin_targets(self):
+        """站點設定的後台 target（內部 SSO 用）；未設定或格式不對時為空。"""
+        raw = request.env['ir.config_parameter'].sudo().get_param(ADMIN_TARGETS_PARAM, '')
+        targets = parse_admin_targets(raw)
+        if raw and not targets:
+            _logger.warning('%s 格式不正確，視為未設定', ADMIN_TARGETS_PARAM)
+        return targets
+
+    def _get_booking_resume(self):
+        """預約模組的續訂路徑與草稿 session key；兩者都合法才回傳，否則 (None, None)。"""
+        ICP = request.env['ir.config_parameter'].sudo()
+        return parse_booking_resume(ICP.get_param(BOOKING_RESUME_PATH_PARAM, ''),
+                                    ICP.get_param(BOOKING_INTENT_KEY_PARAM, ''))
+
+    def _get_login_channel_id(self, config):
+        """LINE Login Channel ID：先看 line.liff.config，再退回 woow_line_base 的全域設定。"""
+        channel_id = config.login_channel_id if config else ''
+        if not channel_id:
+            channel_id = request.env['ir.config_parameter'].sudo().get_param(
+                'woow_line_base.login_channel_id', '')
+        return channel_id or ''
+
     def _sanitize_target(self, target):
         """B-2：白名單過濾 target。不合法就退回預設值 'book'，不原樣回吐——
         這兩個中間頁會把 target 內嵌進 inline <script>，任何不在安全字元集
@@ -119,9 +142,9 @@ class LiffRedirectController(http.Controller):
         """
         config = request.env['line.liff.config'].sudo()._get_default_config()
         booking_nonce = self._sanitize_booking_nonce(kwargs.get('booking_nonce'))
-        if not config or not allowed_target(target) or not consume_challenge(
+        if not allowed_target(target) or not consume_challenge(
                 request.session, kwargs.get('login_state'), target, booking_nonce,
-                time.time(), config.id):
+                time.time(), config.id if config else False):
             return None, request.make_response('登入驗證已過期，請關閉此頁後重新點選 LINE 選單。',
                                                headers=[('Cache-Control', 'no-store')], status=400)
         # 取得 token
@@ -143,11 +166,12 @@ class LiffRedirectController(http.Controller):
         line_service = request.env['line.api.service'].sudo()
         payload = None
         id_token_verified = False
-        if not config.login_channel_id:
+        login_channel_id = self._get_login_channel_id(config)
+        if not login_channel_id:
             return None, request.redirect('/web/login?error=line_configuration')
 
         if id_token:
-            payload = line_service.verify_id_token(id_token, login_channel_id=config.login_channel_id)
+            payload = line_service.verify_id_token(id_token, login_channel_id=login_channel_id)
             id_token_verified = bool(payload)
             if payload:
                 _logger.debug('liff_redirect: ID Token 驗證成功')
@@ -199,17 +223,19 @@ class LiffRedirectController(http.Controller):
 
         # Internal SSO is separate from email/profile matching and portal provisioning.
         try:
-            internal_user = self._resolve_internal_sso_user(payload, id_token_verified, config)
+            internal_user = self._resolve_internal_sso_user(
+                payload, id_token_verified, config, login_channel_id)
         except ValueError:
             _logger.warning('LIFF internal SSO denied by explicit binding policy')
             request.session.logout(keep_db=True)
             return None, request.redirect('/web/login?error=line_sso_denied')
         if internal_user:
             return self._establish_identity_session(internal_user, target, kwargs)
-        if target in ADMIN_TARGETS:
+        admin_targets = self._get_admin_targets()
+        if target in admin_targets:
             # No mapping: require normal credentials, never inherit another account's cookie.
             request.session.logout(keep_db=True)
-            return None, request.redirect('/web/login?' + urlencode({'redirect': ADMIN_TARGETS[target]}))
+            return None, request.redirect('/web/login?' + urlencode({'redirect': admin_targets[target]}))
 
         # 建立或更新 LINE 用戶
         LineUser = request.env['line.user'].sudo()
@@ -229,11 +255,14 @@ class LiffRedirectController(http.Controller):
 
         return self._establish_identity_session(user, target, kwargs)
 
-    def _resolve_internal_sso_user(self, payload, id_token_verified, config):
+    def _resolve_internal_sso_user(self, payload, id_token_verified, config, login_channel_id):
         env = request.env
         raw = env['ir.config_parameter'].sudo().get_param(BINDING_PARAM, '[]')
-        binding = binding_for_claims(raw, payload, id_token_verified, config.id,
-                                     config.login_channel_id, time.time())
+        # 沒有 line.liff.config 時 config_id 為 False：有對應綁定的身分會被拒絕（fail closed），
+        # 沒有綁定的身分照常走 portal 登入。
+        binding = binding_for_claims(raw, payload, id_token_verified,
+                                     config.id if config else False,
+                                     login_channel_id, time.time())
         if not binding:
             return None
         line = env['line.user'].sudo().browse(binding['line_user_id']).exists()
@@ -251,12 +280,13 @@ class LiffRedirectController(http.Controller):
         if not user.exists() or not user.active:
             return None, request.redirect('/web/login?error=login_failed')
         booking_nonce = self._sanitize_booking_nonce(kwargs.get('booking_nonce'))
-        intents = request.session.get(BOOKING_KEY, {})
+        _resume_path, booking_key = self._get_booking_resume()
+        intents = request.session.get(booking_key, {}) if booking_key else {}
         intent = intents.get(booking_nonce) if isinstance(intents, dict) and booking_nonce else None
         request.session.logout(keep_db=True)
         # Only carry the selected server-stored booking draft, never account/session data.
         if intent and target == 'book':
-            request.session[BOOKING_KEY] = {booking_nonce: intent}
+            request.session[booking_key] = {booking_nonce: intent}
         user_env = request.env(user=user.id, su=False)
         mfa_url = user.with_env(user_env)._mfa_url()
         if mfa_url:
@@ -582,9 +612,7 @@ liff.init({{liffId:liffId}}).then(function(){{
         Config = request.env['line.liff.config'].sudo()
         config = Config._get_default_config()
         path = (config.rebook_path or '').strip() if config else ''
-        if (path.startswith('/') and not path.startswith('//') and '\\' not in path
-                and not any(ord(c) < 32 for c in path)
-                and not path.startswith('/liff/redirect')):
+        if is_safe_local_path(path) and not path.startswith('/liff/redirect'):
             return path
         return None
 
@@ -595,16 +623,18 @@ liff.init({{liffId:liffId}}).then(function(){{
         :param kwargs: 額外參數
         :return: URL 字串
         """
-        if target in ADMIN_TARGETS:
-            return ADMIN_TARGETS[target]
+        admin_targets = self._get_admin_targets()
+        if target in admin_targets:
+            return admin_targets[target]
         if not allowed_target(target):
             return '/my/home'
-        # A booking nonce may only select this fixed local resume route.  The
-        # appointment controller consumes it from the same server-side session
+        # A booking nonce may only select the site-configured local resume route.
+        # The appointment controller consumes it from the same server-side session
         # after LIFF establishes identity; no user-supplied return URL exists.
         booking_nonce = self._sanitize_booking_nonce(kwargs.get('booking_nonce'))
-        if target == 'book' and booking_nonce:
-            return f'/appointment/booking/resume?booking_nonce={booking_nonce}'
+        resume_path, _booking_key = self._get_booking_resume()
+        if target == 'book' and booking_nonce and resume_path:
+            return f'{resume_path}?{urlencode({"booking_nonce": booking_nonce})}'
 
         # 'book' 可由 line.liff.config.rebook_path 覆寫，取不到才用
         # REDIRECT_TARGETS 裡的安全預設值（/my/home）。

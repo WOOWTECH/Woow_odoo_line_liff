@@ -1,23 +1,63 @@
-"""Small, fail-closed policy helpers. No Odoo access or authentication side effects."""
+"""Small, fail-closed policy helpers. No Odoo access or authentication side effects.
+
+站點專屬的值（內部 SSO 綁定、後台 target、預約草稿銜接）都由
+ir.config_parameter 提供，預設為空；沒設定的站點行為與一般 portal 登入相同。
+"""
 import json
 import math
 import re
 import secrets
 
 BINDING_PARAM = 'woow_odoo_line_liff.internal_sso_bindings'
+# JSON 物件 {"<target>": "<站內路徑>"}；只有內部 SSO 綁定的使用者會被直接帶到這些路徑，
+# 其餘人一律走 Odoo 原生登入（redirect 參數帶同一個路徑）。
+ADMIN_TARGETS_PARAM = 'woow_odoo_line_liff.internal_sso_admin_targets'
+# 預約模組的「登入後繼續預約」路徑與它存放草稿的 session key；兩者都設定才啟用。
+BOOKING_RESUME_PATH_PARAM = 'woow_odoo_line_liff.booking_resume_path'
+BOOKING_INTENT_KEY_PARAM = 'woow_odoo_line_liff.booking_intent_session_key'
 STATE_KEY = 'woow_line_liff.login_challenges'
-BOOKING_KEY = 'reservation_module.booking_intents'
-ADMIN_TARGETS = {
-    'admin-bookings': '/odoo/action-813',
-    'admin-conversations': '/odoo/livechat/2/action-870',
-    'admin-service-60': '/odoo/action-812/1',
-    'admin-service-90': '/odoo/action-812/2',
-}
-PORTAL_TARGETS = {'book', 'my-bookings', 'profile', 'home', 'orders', 'invoices'}
+
+_TARGET_RE = re.compile(r'[A-Za-z0-9_-]+(?:/[A-Za-z0-9_-]+)*')
+_TARGET_NAME_RE = re.compile(r'[A-Za-z0-9_-]{1,64}')
+_SESSION_KEY_RE = re.compile(r'[A-Za-z0-9_.-]{1,128}')
 
 
 def allowed_target(target):
-    return isinstance(target, str) and (target in PORTAL_TARGETS or target in ADMIN_TARGETS or bool(re.fullmatch(r'booking/[1-9][0-9]{0,9}', target)))
+    """target 只能是以 / 分隔的安全字元片段：不可有空片段、開頭結尾的 /，長度 64 內。
+
+    不限定固定清單：各站 Rich Menu 會用 /liff/redirect/<自訂路徑>，
+    實際跳轉位置由 controller 的 _get_redirect_url 決定。
+    """
+    return isinstance(target, str) and len(target) <= 64 and bool(_TARGET_RE.fullmatch(target))
+
+
+def is_safe_local_path(path):
+    """只接受站內絕對路徑：/ 開頭、非 //、無反斜線與控制字元。"""
+    return (isinstance(path, str) and 0 < len(path) <= 512 and path.startswith('/')
+            and not path.startswith('//') and '\\' not in path
+            and not any(ord(c) < 32 or ord(c) == 127 for c in path))
+
+
+def parse_admin_targets(raw):
+    """解析後台 target 設定；格式不對時整份視為未設定（回傳空 dict）。"""
+    try:
+        data = json.loads(raw or '{}')
+    except (ValueError, TypeError):
+        return {}
+    if not isinstance(data, dict):
+        return {}
+    if not all(isinstance(k, str) and _TARGET_NAME_RE.fullmatch(k) and is_safe_local_path(v)
+               for k, v in data.items()):
+        return {}
+    return dict(data)
+
+
+def parse_booking_resume(path, session_key):
+    """回傳 (path, session_key)；任一缺漏或不合法就回傳 (None, None)，停用預約銜接。"""
+    if is_safe_local_path(path) and '?' not in path and '#' not in path \
+            and isinstance(session_key, str) and _SESSION_KEY_RE.fullmatch(session_key):
+        return path, session_key
+    return None, None
 
 
 def issue_challenge(session, target, booking_nonce, now, config_id):
