@@ -40,10 +40,10 @@ jobs:
         include:
           - state: stock-livechat
             modules: "woow_line_base,woow_odoo_line_liff,im_livechat,calendar,sale_management"
-            min_tests: "115"
+            min_tests: "140"
           - state: with-line-livechat
             modules: "woow_line_base,woow_odoo_line_liff,woow_odoo_livechat_line"
-            min_tests: "115"
+            min_tests: "140"
     container:
       image: odoo:18
       options: --user root
@@ -86,16 +86,35 @@ jobs:
         with:
           path: addons/woow_odoo_line_liff
 
+      # 跨 repo 的成對修改（例如 line_base 改 API、這裡改呼叫端）放在同名分支上。
+      # 相依 repo 有同名分支就用它，否則用預設分支；不然 PR 只能等對方先合併才會綠。
+      - name: Pick same-named dependency branches
+        id: deps
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          for repo in woow_line_base woow_odoo_livechat_line; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              "https://api.github.com/repos/WOOWTECH/$repo/branches/$BRANCH")
+            if [ "$code" = 200 ]; then ref=$BRANCH; else ref=; fi
+            echo "$repo=$ref" >> "$GITHUB_OUTPUT"
+            echo "$repo -> ${ref:-default branch} (HTTP $code)"
+          done
+
       - name: Check out woow_line_base (dependency)
         uses: actions/checkout@v4
         with:
           repository: WOOWTECH/woow_line_base
+          ref: ${{ steps.deps.outputs.woow_line_base }}
           path: addons/woow_line_base
 
       - name: Check out woow_odoo_livechat_line (installed only in with-line-livechat)
         uses: actions/checkout@v4
         with:
           repository: WOOWTECH/woow_odoo_livechat_line
+          ref: ${{ steps.deps.outputs.woow_odoo_livechat_line }}
           path: addons/woow_odoo_livechat_line
 
       - name: Install into a fresh database
