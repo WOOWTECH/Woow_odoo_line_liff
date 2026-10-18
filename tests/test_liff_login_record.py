@@ -8,6 +8,7 @@ superuser with an explicit create_uid, which the ORM silently drops, so every
 LIFF login was attributed to OdooBot and the customer's login date never
 moved (seen live on three tenants on 2026-09-11).
 """
+import re
 from unittest.mock import MagicMock, patch
 
 from odoo.tests import HttpCase, tagged
@@ -37,9 +38,13 @@ class TestLiffLoginCountsAsTheCustomersLogin(HttpCase):
         last_log_before = self.env['res.users.log'].sudo().search(
             [], order='id desc', limit=1).id or 0
 
+        # 中間頁會發一次性的 login_state；POST 一定要帶回同一個值。
+        page = self.url_open('/liff/redirect/home')
+        login_state = re.search(r'var loginState="([A-Za-z0-9_-]{43})"', page.text).group(1)
         with patch(MOCK_POST, side_effect=self._line_accepts_the_id_token):
             resp = self.url_open(
-                '/liff/redirect/home', data={'id_token': 'fake-id-token'},
+                '/liff/redirect/home',
+                data={'id_token': 'fake-id-token', 'login_state': login_state},
                 allow_redirects=False)
         self.assertIn(resp.status_code, (302, 303),
                       'the LIFF login should succeed and redirect: %s' % resp.text[:200])
