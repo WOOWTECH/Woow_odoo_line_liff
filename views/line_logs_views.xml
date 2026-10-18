@@ -92,12 +92,16 @@
         <field name="model">line.push.log</field>
         <field name="arch" type="xml">
             <list string="LINE 推播記錄" create="0" edit="0"
-                  decoration-success="success == True"
-                  decoration-danger="success == False">
+                  decoration-success="result_state == 'accepted' or (not result_state and success)"
+                  decoration-danger="result_state == 'failed' or (not result_state and not success and status_code &gt;= 400)"
+                  decoration-warning="result_state in ('unknown', 'not_attempted') or (not result_state and not success and not status_code)">
                 <field name="create_date"/>
+                <field name="config_id"/>
                 <field name="line_user_id"/>
+                <field name="operation_source" optional="show"/>
+                <field name="result_state" widget="badge"/>
                 <field name="status_code"/>
-                <field name="success"/>
+                <field name="success" string="API 已受理" optional="hide"/>
                 <field name="messages" optional="hide"/>
             </list>
         </field>
@@ -112,12 +116,16 @@
                     <group>
                         <group>
                             <field name="create_date"/>
+                            <field name="config_id"/>
                             <field name="line_user_id"/>
+                            <field name="operation_source"/>
+                            <field name="result_state" widget="badge"/>
                             <field name="status_code"/>
-                            <field name="success"/>
+                            <field name="success" string="API 已受理"/>
                         </group>
                     </group>
-                    <group string="訊息內容">
+                    <div class="alert alert-info" role="status">API 受理不代表收件者已讀。新式日誌僅保存訊息摘要，歷史記錄可能仍含原內容。</div>
+                    <group string="訊息摘要／歷史內容">
                         <field name="messages" nolabel="1"/>
                     </group>
                     <group string="回應內容">
@@ -134,8 +142,12 @@
         <field name="arch" type="xml">
             <search string="搜尋推播記錄">
                 <field name="line_user_id"/>
-                <filter name="success" string="成功" domain="[('success', '=', True)]"/>
-                <filter name="failed" string="失敗" domain="[('success', '=', False)]"/>
+                <field name="config_id"/>
+                <field name="result_state"/>
+                <filter name="success" string="API 已受理" domain="[('success', '=', True)]"/>
+                <filter name="failed" string="未受理／需檢查" domain="[('success', '=', False)]"/>
+                <filter name="result_unknown" string="結果未知" domain="[('result_state', '=', 'unknown')]"/>
+                <filter name="missing_source" string="缺設定檔歸屬" domain="[('config_id', '=', False)]"/>
                 <group expand="0" string="分組">
                     <filter name="group_success" string="狀態" context="{'group_by': 'success'}"/>
                     <filter name="group_date" string="日期" context="{'group_by': 'create_date:day'}"/>

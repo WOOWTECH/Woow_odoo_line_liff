@@ -11,12 +11,18 @@ import time
 
 from odoo import http, SUPERUSER_ID
 from odoo.http import request
+from urllib.parse import urlencode
+from .liff_sso_policy import (
+    ADMIN_TARGETS, BINDING_PARAM, BOOKING_KEY, allowed_target,
+    binding_for_claims, consume_challenge, issue_challenge,
+)
 
 _logger = logging.getLogger(__name__)
 
 # B-2：只接受安全字元的 target，避免任意字串（含 <script> breakout payload）
 # 被當成合法 target 一路帶進 inline <script>。
 _SAFE_TARGET_RE = re.compile(r'^[A-Za-z0-9_/-]{1,64}$')
+_SAFE_BOOKING_NONCE_RE = re.compile(r'^[A-Za-z0-9_-]{32,128}$')
 
 # B-2：這兩個 LIFF 中間頁都會把 target 這類外部可控字串內嵌進 inline <script>，
 # 補一個保守但不影響既有 liff.line-scdn.net SDK 運作的 CSP 當第三層防線。
@@ -86,6 +92,13 @@ class LiffRedirectController(http.Controller):
             'woow_odoo_line_liff.liff_id_member', ''
         )
 
+    @staticmethod
+    def _sanitize_booking_nonce(booking_nonce):
+        """Only pass a server-generated booking intent nonce through LIFF."""
+        if isinstance(booking_nonce, str) and _SAFE_BOOKING_NONCE_RE.fullmatch(booking_nonce):
+            return booking_nonce
+        return None
+
     def _sanitize_target(self, target):
         """B-2：白名單過濾 target。不合法就退回預設值 'book'，不原樣回吐——
         這兩個中間頁會把 target 內嵌進 inline <script>，任何不在安全字元集
@@ -104,6 +117,13 @@ class LiffRedirectController(http.Controller):
         :param target: LIFF target 名稱，用於 token 過期時 refresh 回同一個 target
         :return: (user, None) on success, (None, redirect_response) on failure
         """
+        config = request.env['line.liff.config'].sudo()._get_default_config()
+        booking_nonce = self._sanitize_booking_nonce(kwargs.get('booking_nonce'))
+        if not config or not allowed_target(target) or not consume_challenge(
+                request.session, kwargs.get('login_state'), target, booking_nonce,
+                time.time(), config.id):
+            return None, request.make_response('登入驗證已過期，請關閉此頁後重新點選 LINE 選單。',
+                                               headers=[('Cache-Control', 'no-store')], status=400)
         # 取得 token
         id_token = kwargs.get('id_token', '')
         access_token = kwargs.get('access_token', '')
@@ -122,9 +142,13 @@ class LiffRedirectController(http.Controller):
         # 驗證：優先 ID Token，備援 Access Token
         line_service = request.env['line.api.service'].sudo()
         payload = None
+        id_token_verified = False
+        if not config.login_channel_id:
+            return None, request.redirect('/web/login?error=line_configuration')
 
         if id_token:
-            payload = line_service.verify_id_token(id_token)
+            payload = line_service.verify_id_token(id_token, login_channel_id=config.login_channel_id)
+            id_token_verified = bool(payload)
             if payload:
                 _logger.debug('liff_redirect: ID Token 驗證成功')
 
@@ -148,19 +172,22 @@ class LiffRedirectController(http.Controller):
                 '<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>'
                 '<script>'
                 '(function(){'
-                'var liffId=__LIFFID__;var target=__TARGET__;'
+                'var liffId=__LIFFID__;var target=__TARGET__;var nonceSuffix=__NONCE_SUFFIX__;'
                 "if(typeof liff==='undefined'||!liffId){window.location.href='/web/login?error=invalid_token';return;}"
                 'liff.init({liffId:liffId}).then(function(){'
                 'try{liff.logout();}catch(e){}'
-                "liff.login({redirectUri:window.location.origin+'/liff/redirect/'+target});"
+                "liff.login({redirectUri:window.location.origin+'/liff/redirect/'+target+nonceSuffix});"
                 "}).catch(function(){window.location.href='/web/login?error=invalid_token';});"
                 '})();'
                 '</script></body></html>'
             )
             safe_target = self._sanitize_target(target)
+            booking_nonce = self._sanitize_booking_nonce(kwargs.get('booking_nonce'))
+            nonce_suffix = '?booking_nonce=' + booking_nonce if booking_nonce else ''
             html = html.replace(
                 '__LIFFID__', _json_for_script(self._get_liff_id())
-            ).replace('__TARGET__', _json_for_script(safe_target))
+            ).replace('__TARGET__', _json_for_script(safe_target)).replace(
+                '__NONCE_SUFFIX__', _json_for_script(nonce_suffix))
             return None, request.make_response(html, headers=[
                 ('Content-Type', 'text/html; charset=utf-8'),
                 ('Content-Security-Policy', _LIFF_BRIDGE_CSP),
@@ -169,6 +196,20 @@ class LiffRedirectController(http.Controller):
         line_uid = payload.get('sub')
         if not line_uid:
             return None, request.redirect('/web/login?error=no_uid')
+
+        # Internal SSO is separate from email/profile matching and portal provisioning.
+        try:
+            internal_user = self._resolve_internal_sso_user(payload, id_token_verified, config)
+        except ValueError:
+            _logger.warning('LIFF internal SSO denied by explicit binding policy')
+            request.session.logout(keep_db=True)
+            return None, request.redirect('/web/login?error=line_sso_denied')
+        if internal_user:
+            return self._establish_identity_session(internal_user, target, kwargs)
+        if target in ADMIN_TARGETS:
+            # No mapping: require normal credentials, never inherit another account's cookie.
+            request.session.logout(keep_db=True)
+            return None, request.redirect('/web/login?' + urlencode({'redirect': ADMIN_TARGETS[target]}))
 
         # 建立或更新 LINE 用戶
         LineUser = request.env['line.user'].sudo()
@@ -183,39 +224,60 @@ class LiffRedirectController(http.Controller):
         # 確保有對應的 portal user
         partner, user = self._ensure_portal_user(line_user, payload)
         if not user:
+            request.session.logout(keep_db=True)
             return None, request.redirect('/web/login?error=login_failed')
 
-        # Passwordless session：直接寫 session 狀態，跳過 res.users._check_credentials
-        # 之前用 temp-password + authenticate 的做法在多 worker + ORM cache 場景下
-        # 會偶發 AccessDenied（rewrite 的 hash 尚未反映到 authenticate 讀到的 cursor）。
-        from odoo import api, SUPERUSER_ID
+        return self._establish_identity_session(user, target, kwargs)
+
+    def _resolve_internal_sso_user(self, payload, id_token_verified, config):
+        env = request.env
+        raw = env['ir.config_parameter'].sudo().get_param(BINDING_PARAM, '[]')
+        binding = binding_for_claims(raw, payload, id_token_verified, config.id,
+                                     config.login_channel_id, time.time())
+        if not binding:
+            return None
+        line = env['line.user'].sudo().browse(binding['line_user_id']).exists()
+        user = env['res.users'].sudo().browse(binding['user_id']).exists()
+        if not (line and user and user.active and not user.share
+                and user.id != SUPERUSER_ID and not user.has_group('base.group_system')
+                and line.line_user_id == payload['sub']
+                and line.liff_config_id.id == config.id
+                and line.partner_id.id == binding['partner_id'] == user.partner_id.id):
+            raise ValueError('Internal SSO binding no longer matches')
+        return user
+
+    def _establish_identity_session(self, user, target, kwargs):
+        """Use Odoo's rotating session lifecycle and honor the normal MFA step."""
+        if not user.exists() or not user.active:
+            return None, request.redirect('/web/login?error=login_failed')
+        booking_nonce = self._sanitize_booking_nonce(kwargs.get('booking_nonce'))
+        intents = request.session.get(BOOKING_KEY, {})
+        intent = intents.get(booking_nonce) if isinstance(intents, dict) and booking_nonce else None
+        request.session.logout(keep_db=True)
+        # Only carry the selected server-stored booking draft, never account/session data.
+        if intent and target == 'book':
+            request.session[BOOKING_KEY] = {booking_nonce: intent}
+        user_env = request.env(user=user.id, su=False)
+        mfa_url = user.with_env(user_env)._mfa_url()
+        if mfa_url:
+            # Fail closed for MFA accounts: use the full native login flow.
+            # Do not leave a partial session that can outlive/replay an SSO binding.
+            destination = self._get_redirect_url(target, kwargs)
+            return None, request.redirect('/web/login?' + urlencode({'redirect': destination}))
+        request.session.pre_uid = user.id
+        request.session.pre_login = user.login
         try:
-            # 讀出目標 user 需要的資料（用 SUPERUSER，因為 auth='none' 下 env.uid 為 None）
-            su_env = api.Environment(request.env.cr, SUPERUSER_ID, {})
-            fresh_user = su_env['res.users'].browse(user.id)
-            if not fresh_user.exists() or not fresh_user.active:
-                raise Exception('user missing or inactive')
-            # 直接設 session state，並用 res.users._compute_session_token 產生合法 token
-            request.session.uid = fresh_user.id
-            request.session.login = fresh_user.login
-            request.session.session_token = fresh_user._compute_session_token(request.session.sid)
-            request.session.pre_login = fresh_user.login
-            request.session.pre_uid = fresh_user.id
-            # B-3b：記錄這次 session 是「剛透過 LIFF 免密碼登入」建立的，
-            # 時間戳給 portal.py 的 _is_line_user() 判斷是否在有效期內
-            # （目前設 15 分鐘），避免免密碼 session 被無限期拿來跳過
-            # 改密碼的舊密碼檢查、或連帶改掉 login。
-            request.session.liff_authenticated_at = time.time()
-            # 更新 last login 紀錄（authenticate() 原本會做）。一定要以客人
-            # 本人的身分寫：Odoo 會丟掉 create() 裡明確指定的 create_uid，改填
-            # 目前 env 的使用者，所以用 SUPERUSER env 寫會全部記成 OdooBot，
-            # 客人的 login_date 永遠不會更新。
-            fresh_user.with_user(fresh_user)._update_last_login()
+            request.session.finalize(user_env)
+            request.update_env(user=user.id, su=False)
+            request.update_context(**request.session.context)
+            if user.share:
+                request.session.liff_authenticated_at = time.time()
+            user.with_env(user_env)._update_last_login()
             request.env.cr.commit()
         except Exception:
-            _logger.exception('liff_redirect: passwordless session 建立失敗')
+            request.session.logout(keep_db=True)
+            _logger.exception('LIFF session finalization failed')
             return None, request.redirect('/web/login?error=login_failed')
-
         return user, None
 
     # ------------------------------------------------------------------
@@ -236,7 +298,7 @@ class LiffRedirectController(http.Controller):
         POST: 驗證 ID Token，建立 session，302 redirect
         """
         if request.httprequest.method == 'GET':
-            return self._render_liff_bridge_page(target)
+            return self._render_liff_bridge_page(target, **kwargs)
 
         user, error = self._authenticate_liff_user(target=target, **kwargs)
         if error:
@@ -244,10 +306,7 @@ class LiffRedirectController(http.Controller):
 
         redirect_url = self._get_redirect_url(target, kwargs)
 
-        _logger.info(
-            'liff_redirect: LINE → user %s → %s',
-            user.login, redirect_url,
-        )
+        _logger.info('LIFF authentication completed: uid=%s target=%s', user.id, target)
         return request.redirect(redirect_url)
 
     @http.route('/liff/redirect/booking/<int:booking_id>', type='http',
@@ -269,34 +328,23 @@ class LiffRedirectController(http.Controller):
     # 私有方法
     # ------------------------------------------------------------------
 
-    def _render_liff_bridge_page(self, target):
+    def _render_liff_bridge_page(self, target, **kwargs):
         """渲染 LIFF 中間頁（取得 ID Token 用）
 
         使用 auth='none' 所以不能用 request.render()，直接回 HTML。
-        Fast path: 若 Odoo session cookie 仍有效，直接 302 到目標，跳過 LIFF login。
+        Always verify LINE identity: an existing Odoo cookie may belong to someone else.
         """
-        # ---- Fast path：既有 Odoo session 仍有效就直接放行 ----
-        # 用原始 target（跟 POST 成功後的 _get_redirect_url 一致），這裡只是
-        # 302 的 Location，不會被內嵌進 HTML，不需要收窄到 B-2 的白名單。
-        try:
-            if request.session and request.session.uid:
-                from odoo import api, SUPERUSER_ID
-                su_env = api.Environment(request.env.cr, SUPERUSER_ID, {})
-                u = su_env['res.users'].browse(request.session.uid)
-                if u.exists() and u.active:
-                    expected = u._compute_session_token(request.session.sid)
-                    if expected and expected == request.session.session_token:
-                        target_url = self._get_redirect_url(target, {})
-                        _logger.info('liff bridge fast-path: uid=%s → %s', u.id, target_url)
-                        return request.redirect(target_url)
-        except Exception:
-            _logger.exception('liff bridge fast-path 檢查失敗（fallback 到 LIFF 流程）')
+        if not allowed_target(target):
+            return request.not_found()
 
         # B-2：從這裡開始 target 會被內嵌進下面的 inline <script>，先過白名單。
         target = self._sanitize_target(target)
+        booking_nonce = self._sanitize_booking_nonce(kwargs.get('booking_nonce'))
 
         Config = request.env['line.liff.config'].sudo()
         config = Config._get_default_config()
+        login_state = issue_challenge(request.session, target, booking_nonce, time.time(),
+                                      config.id if config else False)
         liff_id = config.liff_id_member if config else ''
         if not liff_id:
             ICP = request.env['ir.config_parameter'].sudo()
@@ -324,6 +372,8 @@ class LiffRedirectController(http.Controller):
 <script>
 (function(){{
 var serverTarget={_json_for_script(target)};
+var bookingNonce={_json_for_script(booking_nonce)};
+var loginState={_json_for_script(login_state)};
 var fallbacks={_json_for_script(direct_urls)};
 var liffId={_json_for_script(liff_id)};
 var $st=document.getElementById('st');
@@ -331,8 +381,11 @@ var $er=document.getElementById('er');
 var $sp=document.getElementById('sp');
 function showErr(msg){{$sp.style.display='none';$st.textContent='登入失敗';$er.style.display='block';$er.textContent=msg;}}
 var target=serverTarget;
-if(target&&target!=='book'){{sessionStorage.setItem('liff_target',target);}}
-else{{var saved=sessionStorage.getItem('liff_target');if(saved){{target=saved;}}}}
+sessionStorage.removeItem('liff_target');
+function bookingRedirectUri(){{
+  var url=window.location.origin+'/liff/redirect/'+target;
+  return bookingNonce ? url+'?booking_nonce='+encodeURIComponent(bookingNonce) : url;
+}}
 function fb(reason){{
   sessionStorage.removeItem('liff_target');
   if(reason){{showErr(reason);return;}}
@@ -341,7 +394,7 @@ function fb(reason){{
 if(!liffId){{fb('LIFF ID 未設定');return;}}
 if(typeof liff==='undefined'){{fb('LIFF SDK 載入失敗');return;}}
 liff.init({{liffId:liffId}}).then(function(){{
-  if(!liff.isLoggedIn()){{$st.textContent='正在跳轉 LINE 登入...';liff.login({{redirectUri:window.location.origin+'/liff/redirect/'+target}});return;}}
+  if(!liff.isLoggedIn()){{$st.textContent='正在跳轉 LINE 登入...';liff.login({{redirectUri:bookingRedirectUri()}});return;}}
   $st.textContent='正在驗證身份...';
   var t=null,a=null;
   try{{t=liff.getIDToken();}}catch(e){{}}
@@ -349,6 +402,8 @@ liff.init({{liffId:liffId}}).then(function(){{
   if(!t&&!a){{fb('無法取得 LINE Token（ID Token 和 Access Token 皆為空）');return;}}
   sessionStorage.removeItem('liff_target');
   var f=document.createElement('form');f.method='POST';f.action='/liff/redirect/'+target;
+  var stateInput=document.createElement('input');stateInput.type='hidden';stateInput.name='login_state';stateInput.value=loginState;f.appendChild(stateInput);
+  if(bookingNonce){{var n=document.createElement('input');n.type='hidden';n.name='booking_nonce';n.value=bookingNonce;f.appendChild(n);}}
   if(t){{var i=document.createElement('input');i.type='hidden';i.name='id_token';i.value=t;f.appendChild(i);}}
   if(a){{var i2=document.createElement('input');i2.type='hidden';i2.name='access_token';i2.value=a;f.appendChild(i2);}}
   document.body.appendChild(f);f.submit();
@@ -356,7 +411,8 @@ liff.init({{liffId:liffId}}).then(function(){{
 }})();
 </script></body></html>"""
         return request.make_response(html, headers=[
-            ('Content-Type', 'text/html'),
+            ('Content-Type', 'text/html; charset=utf-8'),
+            ('Cache-Control', 'no-store'),
             ('Content-Security-Policy', _LIFF_BRIDGE_CSP),
         ])
 
@@ -526,7 +582,9 @@ liff.init({{liffId:liffId}}).then(function(){{
         Config = request.env['line.liff.config'].sudo()
         config = Config._get_default_config()
         path = (config.rebook_path or '').strip() if config else ''
-        if path and not path.startswith('/liff/redirect'):
+        if (path.startswith('/') and not path.startswith('//') and '\\' not in path
+                and not any(ord(c) < 32 for c in path)
+                and not path.startswith('/liff/redirect')):
             return path
         return None
 
@@ -537,6 +595,17 @@ liff.init({{liffId:liffId}}).then(function(){{
         :param kwargs: 額外參數
         :return: URL 字串
         """
+        if target in ADMIN_TARGETS:
+            return ADMIN_TARGETS[target]
+        if not allowed_target(target):
+            return '/my/home'
+        # A booking nonce may only select this fixed local resume route.  The
+        # appointment controller consumes it from the same server-side session
+        # after LIFF establishes identity; no user-supplied return URL exists.
+        booking_nonce = self._sanitize_booking_nonce(kwargs.get('booking_nonce'))
+        if target == 'book' and booking_nonce:
+            return f'/appointment/booking/resume?booking_nonce={booking_nonce}'
+
         # 'book' 可由 line.liff.config.rebook_path 覆寫，取不到才用
         # REDIRECT_TARGETS 裡的安全預設值（/my/home）。
         if target == 'book':
@@ -570,3 +639,4 @@ liff.init({{liffId:liffId}}).then(function(){{
         # 預設回首頁（不是登入頁，因為 session 已建立）
         _logger.warning('liff_redirect: 未知的 target=%s，導回首頁', target)
         return '/odoo'
+

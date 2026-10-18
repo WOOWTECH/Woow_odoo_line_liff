@@ -7,15 +7,30 @@
             <list string="LINE 統計紀錄" default_order="date desc">
                 <field name="date"/>
                 <field name="config_id"/>
-                <field name="delivery_total" string="總送達"/>
-                <field name="delivery_broadcast" optional="show"/>
-                <field name="delivery_push" optional="show"/>
-                <field name="delivery_multicast" optional="show"/>
-                <field name="delivery_narrowcast" optional="hide"/>
-                <field name="delivery_reply" optional="hide"/>
-                <field name="followers" string="好友數"/>
-                <field name="targeted_reaches" optional="show"/>
-                <field name="blocks" optional="hide"/>
+                <field name="fetch_state" widget="badge"
+                       decoration-success="fetch_state == 'ready'"
+                       decoration-warning="fetch_state in ('unknown', 'partial', 'unready', 'out_of_service')"
+                       decoration-danger="fetch_state == 'error'"/>
+                <field name="delivery_fetch_state" widget="badge" optional="show"/>
+                <field name="followers_fetch_state" widget="badge" optional="show"/>
+                <field name="delivery_total" string="總送達"
+                       invisible="delivery_fetch_state != 'ready'"/>
+                <field name="delivery_broadcast" optional="show"
+                       invisible="delivery_fetch_state != 'ready'"/>
+                <field name="delivery_push" optional="show"
+                       invisible="delivery_fetch_state != 'ready'"/>
+                <field name="delivery_multicast" optional="show"
+                       invisible="delivery_fetch_state != 'ready'"/>
+                <field name="delivery_narrowcast" optional="hide"
+                       invisible="delivery_fetch_state != 'ready'"/>
+                <field name="delivery_reply" optional="hide"
+                       invisible="delivery_fetch_state != 'ready'"/>
+                <field name="followers" string="好友數"
+                       invisible="followers_fetch_state != 'ready'"/>
+                <field name="targeted_reaches" optional="show"
+                       invisible="followers_fetch_state != 'ready'"/>
+                <field name="blocks" optional="hide"
+                       invisible="followers_fetch_state != 'ready'"/>
             </list>
         </field>
     </record>
@@ -26,25 +41,40 @@
         <field name="arch" type="xml">
             <form string="LINE 統計紀錄" create="false">
                 <sheet>
+                    <div class="alert alert-warning" role="alert"
+                         invisible="fetch_state == 'ready'">
+                        此筆 Insight 資料尚未驗證完成；未顯示的數值不可視為有效的 0。
+                    </div>
                     <group>
                         <group string="基本">
                             <field name="date"/>
                             <field name="config_id"/>
                         </group>
                         <group string="好友">
-                            <field name="followers"/>
-                            <field name="targeted_reaches"/>
-                            <field name="blocks"/>
+                            <field name="followers" invisible="followers_fetch_state != 'ready'"/>
+                            <field name="targeted_reaches" invisible="followers_fetch_state != 'ready'"/>
+                            <field name="blocks" invisible="followers_fetch_state != 'ready'"/>
+                        </group>
+                        <group string="抓取狀態">
+                            <field name="fetch_state" widget="badge"
+                                   decoration-success="fetch_state == 'ready'"
+                                   decoration-warning="fetch_state in ('unknown', 'partial', 'unready', 'out_of_service')"
+                                   decoration-danger="fetch_state == 'error'"/>
+                            <field name="delivery_fetch_state" widget="badge"/>
+                            <field name="followers_fetch_state" widget="badge"/>
+                            <field name="last_fetch_attempt_at"/>
+                            <field name="last_fetch_success_at"/>
+                            <field name="fetch_error_summary"/>
                         </group>
                     </group>
                     <group>
                         <group string="送達統計">
-                            <field name="delivery_total"/>
-                            <field name="delivery_broadcast"/>
-                            <field name="delivery_push"/>
-                            <field name="delivery_multicast"/>
-                            <field name="delivery_narrowcast"/>
-                            <field name="delivery_reply"/>
+                            <field name="delivery_total" invisible="delivery_fetch_state != 'ready'"/>
+                            <field name="delivery_broadcast" invisible="delivery_fetch_state != 'ready'"/>
+                            <field name="delivery_push" invisible="delivery_fetch_state != 'ready'"/>
+                            <field name="delivery_multicast" invisible="delivery_fetch_state != 'ready'"/>
+                            <field name="delivery_narrowcast" invisible="delivery_fetch_state != 'ready'"/>
+                            <field name="delivery_reply" invisible="delivery_fetch_state != 'ready'"/>
                         </group>
                         <group string="互動統計">
                             <field name="impressions"/>
@@ -64,6 +94,9 @@
             <search string="統計紀錄">
                 <field name="date"/>
                 <field name="config_id"/>
+                <field name="fetch_state"/>
+                <filter name="fetch_ready" string="抓取成功" domain="[('fetch_state', '=', 'ready')]"/>
+                <filter name="fetch_attention" string="需要注意" domain="[('fetch_state', '!=', 'ready')]"/>
                 <filter name="last_7_days" string="近 7 天"
                         domain="[('date', '>=', (context_today() - datetime.timedelta(days=7)).strftime('%%Y-%%m-%%d'))]"/>
                 <filter name="last_30_days" string="近 30 天"

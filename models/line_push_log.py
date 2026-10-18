@@ -37,9 +37,23 @@ class LinePushLog(models.Model):
     # 推播內容
     # ------------------------------------------------------------------
     messages = fields.Text(
-        string='訊息內容',
-        help='推播的 LINE messages JSON',
+        string='訊息摘要',
+        help='新式 push 日誌只保存 messages 數量與類型，不保存完整內容。',
     )
+
+    operation_source = fields.Selection([
+        ('push', '高階 Push'),
+        ('push_message', '低階 Push Message'),
+    ], string='發送來源', index=True,
+       help='由 line.api.service 記錄的發送入口；舊有記錄可為空。')
+
+    result_state = fields.Selection([
+        ('accepted', 'LINE 已受理'),
+        ('failed', 'LINE 明確拒絕'),
+        ('unknown', '結果未知'),
+        ('not_attempted', '未發送'),
+    ], string='結果狀態', index=True,
+       help='HTTP timeout/網路例外為結果未知，不代表 LINE 必然未送達。')
 
     # ------------------------------------------------------------------
     # 回應結果
