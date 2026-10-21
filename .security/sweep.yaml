@@ -1,0 +1,56 @@
+# 自動安全掃描設定（woow-security-sweep）
+#
+# - 掃描流程只讀取預設分支（main）上的這個檔案；在 PR 分支裡修改不會生效。
+# - 修改 .security/ 底下任何檔案的 PR，一律交由人工審查。
+# - 本檔只放掃描規則；其餘上下文由內部設定提供。
+version: 1
+
+repo:
+  full_name: WOOWTECH/Woow_odoo_line_liff
+  default_branch: main
+
+# 掃描範圍與工具
+scan:
+  exclude:
+    - tests/
+    - i18n/
+    - docs/
+  tools:
+    semgrep: {rulesets: [p/python, p/secrets, p/javascript]}
+    bandit: {skip: [B101]}              # B101（assert）：Odoo 測試慣用
+    gitleaks: {}
+    pip_audit: {packages: [requests]}   # 對應 __manifest__.py 的 external_dependencies
+
+# 命中以下任一條件，一律交由人工處理，不自動修正
+always_human:
+  paths:
+    - .security/
+    - security/
+    - migrations/
+    - __manifest__.py
+    - controllers/webhook.py
+    - controllers/liff_redirect.py
+    - controllers/liff_sso_policy.py
+    - models/line_liff_config.py
+    - static/src/js/                    # 前端改動需在 LINE App 內實機驗證
+  severities: [critical]
+  topics: [token, secret, signature, session, login, redirect, sudo]
+
+# 自動修正的限制
+autofix:
+  enabled: true
+  max_prs_per_run: 1
+  branch_prefix: fix/sec-
+
+# 驗證方式
+verify:
+  ci_workflow: tests.yml
+  # 修正不得刪除或弱化以下測試
+  regression_tests:
+    - tests/test_attack_surface.py
+    - tests/test_security_fixes.py
+    - tests/test_liff_login_hardening.py
+    - tests/test_liff_clear_session.py
+    - tests/test_webhook.py
+    - tests/test_webhook_robustness.py
+    - tests/test_auto_reply_regex_dos.py
