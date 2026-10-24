@@ -103,7 +103,7 @@ class LiffRedirectController(http.Controller):
     def _get_admin_targets(self):
         """站點設定的後台 target（內部 SSO 用）；未設定或格式不對時為空。"""
         raw = request.env['ir.config_parameter'].sudo().get_param(ADMIN_TARGETS_PARAM, '')
-        targets = parse_admin_targets(raw)
+        targets = parse_admin_targets(raw, reserved_targets=self.REDIRECT_TARGETS)
         if raw and not targets:
             _logger.warning('%s 格式不正確，視為未設定', ADMIN_TARGETS_PARAM)
         return targets
@@ -221,18 +221,19 @@ class LiffRedirectController(http.Controller):
         if not line_uid:
             return None, request.redirect('/web/login?error=no_uid')
 
-        # Internal SSO is separate from email/profile matching and portal provisioning.
-        try:
-            internal_user = self._resolve_internal_sso_user(
-                payload, id_token_verified, config, login_channel_id)
-        except ValueError:
-            _logger.warning('LIFF internal SSO denied by explicit binding policy')
-            request.session.logout(keep_db=True)
-            return None, request.redirect('/web/login?error=line_sso_denied')
-        if internal_user:
-            return self._establish_identity_session(internal_user, target, kwargs)
         admin_targets = self._get_admin_targets()
         if target in admin_targets:
+            # Internal SSO applies only to explicit staff entries. Member entries
+            # always use the LINE identity's portal user, even for bound staff.
+            try:
+                internal_user = self._resolve_internal_sso_user(
+                    payload, id_token_verified, config, login_channel_id)
+            except ValueError:
+                _logger.warning('LIFF internal SSO denied by explicit binding policy')
+                request.session.logout(keep_db=True)
+                return None, request.redirect('/web/login?error=line_sso_denied')
+            if internal_user:
+                return self._establish_identity_session(internal_user, target, kwargs)
             # No mapping: require normal credentials, never inherit another account's cookie.
             request.session.logout(keep_db=True)
             return None, request.redirect('/web/login?' + urlencode({'redirect': admin_targets[target]}))
@@ -370,6 +371,17 @@ class LiffRedirectController(http.Controller):
         # B-2：從這裡開始 target 會被內嵌進下面的 inline <script>，先過白名單。
         target = self._sanitize_target(target)
         booking_nonce = self._sanitize_booking_nonce(kwargs.get('booking_nonce'))
+
+        # The same LINE browser can carry a staff or another member's Odoo
+        # cookie. Drop that identity before issuing a fresh LINE challenge.
+        # A booking flow may keep only its selected server-side draft.
+        if request.session.uid:
+            _resume_path, booking_key = self._get_booking_resume()
+            intents = request.session.get(booking_key, {}) if booking_key else {}
+            intent = intents.get(booking_nonce) if isinstance(intents, dict) and booking_nonce else None
+            request.session.logout(keep_db=True)
+            if target == 'book' and intent:
+                request.session[booking_key] = {booking_nonce: intent}
 
         Config = request.env['line.liff.config'].sudo()
         config = Config._get_default_config()

@@ -839,8 +839,8 @@ A site that sets none of these behaves like a plain portal login.
 
 | Key | Format | Effect |
 |-----|--------|--------|
-| `woow_odoo_line_liff.internal_sso_bindings` | JSON list of `{subject, enabled, config_id, login_channel_id, line_user_id, partner_id, user_id}` | A LINE user listed here (verified ID Token only) logs in as that **internal** user. Admins (`base.group_system`) and mismatched records are refused; a disabled or malformed binding refuses the login instead of falling back to portal. Users with MFA are sent to the normal login page. |
-| `woow_odoo_line_liff.internal_sso_admin_targets` | JSON object `{"<target>": "/local/path"}` | Backend entry points for Rich Menu buttons. A bound user goes straight there; anyone else is logged out and sent to `/web/login?redirect=<path>`. One invalid entry disables the whole map. |
+| `woow_odoo_line_liff.internal_sso_bindings` | JSON list of `{subject, enabled, config_id, login_channel_id, line_user_id, partner_id, user_id}` | On a configured **internal target only**, a LINE user with a valid binding and verified ID Token logs in as that internal user. Member targets always select the portal user, including for bound staff. Admins (`base.group_system`) and mismatched records are refused; a disabled or malformed binding refuses an internal-target login instead of falling back to portal. Users with MFA are sent to the normal login page. |
+| `woow_odoo_line_liff.internal_sso_admin_targets` | JSON object `{"<target>": "/local/path"}` | Backend entry points for Rich Menu buttons. A bound user goes straight there; anyone else is logged out and sent to `/web/login?redirect=<path>`. Keys cannot overlap built-in member targets such as `home` or `book`; one invalid entry disables the whole map. |
 | `woow_odoo_line_liff.booking_resume_path` + `woow_odoo_line_liff.booking_intent_session_key` | local path / session key | Lets a booking module resume a draft after LIFF login: `book` with a server-issued `booking_nonce` goes to `<path>?booking_nonce=...`, and only that one draft is kept across the session rotation. Both keys must be set. |
 
 #### Authentication Flow
@@ -1051,7 +1051,7 @@ The LIFF login flow accepts a LINE ID Token (JWT) and verifies it via `POST http
 - The LIFF bridge page extracts the token client-side and immediately POSTs it; the token is never persisted in `localStorage` or cookies.
 - After successful authentication, an Odoo session cookie is issued -- the ID Token is not reused for subsequent requests.
 - The bridge page issues a one-time `login_state` (10 minutes, bound to the target and LINE config, kept in the server session). The POST must return it; a missing, expired or reused value is refused with 400, so a token captured elsewhere cannot be posted into another browser's session.
-- An existing Odoo cookie never skips LINE verification (a shared phone may hold someone else's session). Every successful LIFF login rotates the session through Odoo's normal `finalize()` path.
+- The LIFF bridge clears an existing Odoo login before issuing the LINE challenge (a shared phone may hold an internal or another member's session). A configured booking flow keeps only its selected draft. Every successful LIFF login rotates the session through Odoo's normal `finalize()` path.
 
 **Remaining risk**: Within the token's validity window (before `exp`), a man-in-the-middle on the client device could replay the token. HTTPS mitigates network-level interception.
 
