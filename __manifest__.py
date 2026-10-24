@@ -2,7 +2,7 @@
 # woow_odoo_line_liff/__manifest__.py
 {
     'name': 'WOOW LINE Bridge',
-    'version': '18.0.3.3.0',
+    'version': '18.0.3.3.1',
     'category': 'Marketing',
     'summary': 'LINE LIFF 整合層：通知、Rich Menu、LIFF 跳轉',
     'description': """
@@ -49,6 +49,7 @@
         'views/line_insight_log_views.xml',
         'views/menus.xml',
         'views/portal_templates.xml',
+        'views/portal_assigned_tasks.xml',
     ],
     'assets': {
         'web.assets_frontend': [

@@ -11,3 +11,4 @@ from . import liff_redirect
 from . import liff_pages
 from . import liff_api
 from . import portal
+from . import portal_assigned_tasks

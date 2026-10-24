@@ -11,6 +11,7 @@ from . import line_event_log
 from . import line_push_log
 from . import mail_notification_line
 from . import res_partner
+from . import res_users_portal_tasks
 from . import res_config_settings
 from . import line_news
 from . import line_auto_reply

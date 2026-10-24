@@ -859,6 +859,20 @@ See [LIFF Login Flow](#liff-login-flow) for the full diagram.
 
 ---
 
+### Portal tasks for a shared contact
+
+When Project is installed, a Portal user whose contact also has an active internal
+account gets a **我的專案任務** card on `/my/home` if that internal account has assigned
+tasks. The card opens the read-only `/my/assigned-tasks` list and task details.
+The member LIFF entry continues to authenticate as the Portal account.
+
+For each request, the task lookup requires an assignment to the matching internal
+account and applies that account's normal `project.task` read rules. The detail
+route checks the same condition before rendering. A shared contact alone does not
+expose unrelated tasks, and the feature does not grant Portal users backend access.
+
+---
+
 ### `webhook.py` -- LINE Webhook
 
 **File**: `controllers/webhook.py`
