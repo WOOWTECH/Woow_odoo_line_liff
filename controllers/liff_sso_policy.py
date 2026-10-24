@@ -38,15 +38,16 @@ def is_safe_local_path(path):
             and not any(ord(c) < 32 or ord(c) == 127 for c in path))
 
 
-def parse_admin_targets(raw):
-    """解析後台 target 設定；格式不對時整份視為未設定（回傳空 dict）。"""
+def parse_admin_targets(raw, reserved_targets=()):
+    """解析後台 target；不得覆蓋會員入口，格式不對時整份停用。"""
     try:
         data = json.loads(raw or '{}')
     except (ValueError, TypeError):
         return {}
     if not isinstance(data, dict):
         return {}
-    if not all(isinstance(k, str) and _TARGET_NAME_RE.fullmatch(k) and is_safe_local_path(v)
+    if not all(isinstance(k, str) and _TARGET_NAME_RE.fullmatch(k)
+               and k not in reserved_targets and is_safe_local_path(v)
                for k, v in data.items()):
         return {}
     return dict(data)
