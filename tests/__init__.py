@@ -24,4 +24,3 @@ from . import test_liff_clear_session
 from . import test_notification_card_summary
 from . import test_liff_login_hardening
 from . import test_push_log_and_insight
-from . import test_portal_assigned_tasks

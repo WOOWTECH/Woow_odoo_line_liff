@@ -859,17 +859,22 @@ See [LIFF Login Flow](#liff-login-flow) for the full diagram.
 
 ---
 
-### Portal tasks for a shared contact
+### Project tasks in the member portal
 
-When Project is installed, a Portal user whose contact also has an active internal
-account gets a **我的專案任務** card on `/my/home` if that internal account has assigned
-tasks. The card opens the read-only `/my/assigned-tasks` list and task details.
-The member LIFF entry continues to authenticate as the Portal account.
+The member LIFF target signs in as a Portal user. Project tasks use Odoo's
+ordinary Portal access rules: the project must have **Invited portal users and
+all internal users** visibility, and the member's contact must follow the task
+or be an unrestricted project collaborator. To show the project in `/my/projects`,
+the contact must follow the project. Add the contact as a follower of each task
+that should appear in `/my/tasks`; sharing a project alone does not grant access
+to every task. An unrestricted collaborator can see all tasks in that shared
+project.
 
-For each request, the task lookup requires an assignment to the matching internal
-account and applies that account's normal `project.task` read rules. The detail
-route checks the same condition before rendering. A shared contact alone does not
-expose unrelated tasks, and the feature does not grant Portal users backend access.
+The task's **Assignees** (`user_ids`) are internal users. Sharing the same
+contact with an internal account does not copy that account's assignments into
+the Portal account. Keep internal projects private and create or share a
+separate Portal-visible project for member tasks. This addon does not extend
+the Project Portal record rules or add a task proxy route.
 
 ---
 
