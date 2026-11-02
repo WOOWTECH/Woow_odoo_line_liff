@@ -5,6 +5,8 @@
 import base64
 import json
 import logging
+import math
+from urllib.parse import urlsplit
 
 from markupsafe import escape
 
@@ -34,6 +36,17 @@ class LiffPagesController(http.Controller):
         不會寫回，客人還是卡在原本壞掉的登入狀態。
         """
         redirect_to = kwargs.get('r', '/web/login')
+        if not isinstance(redirect_to, str) or any(ord(c) < 32 for c in redirect_to):
+            redirect_to = '/web/login'
+        else:
+            try:
+                target = urlsplit(redirect_to)
+            except ValueError:
+                target = None
+            if (not target or target.scheme or target.netloc
+                    or not target.path.startswith('/')
+                    or target.path.startswith('//') or '\\' in redirect_to):
+                redirect_to = '/web/login'
         request.session.logout(keep_db=True)
         _logger.info('已清除壞 session，重導到 %s', redirect_to)
         return request.redirect(redirect_to)
@@ -130,8 +143,17 @@ class LiffPagesController(http.Controller):
         shop_lng = ICP.get_param('woow_odoo_line_liff.shop_longitude', '')
         shop_hours = ICP.get_param('woow_odoo_line_liff.shop_opening_hours', '')
 
+        try:
+            latitude = float(shop_lat)
+            longitude = float(shop_lng)
+            if (not math.isfinite(latitude) or not math.isfinite(longitude)
+                    or not -90 <= latitude <= 90 or not -180 <= longitude <= 180):
+                raise ValueError('Invalid coordinates')
+        except (TypeError, ValueError):
+            latitude = longitude = None
+
         map_html = ''
-        if shop_lat and shop_lng:
+        if latitude is not None and longitude is not None:
             # json.dumps() 安全序列化成 JS 字串常值（處理引號/反斜線），
             # 再把 </ 斷開避免內容含 </script> 提前關閉整個 <script> 區塊。
             shop_name_js = json.dumps(shop_name).replace('</', '<\\/')
@@ -140,11 +162,12 @@ class LiffPagesController(http.Controller):
             <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
             <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
             <script>
-            var m=L.map('map').setView([{shop_lat},{shop_lng}],16);
+            var m=L.map('map').setView([{latitude},{longitude}],16);
             L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png',{{maxZoom:19}}).addTo(m);
-            L.marker([{shop_lat},{shop_lng}]).addTo(m).bindPopup({shop_name_js}).openPopup();
+            L.marker([{latitude},{longitude}]).addTo(m).bindPopup({shop_name_js}).openPopup();
             </script>'''
-        nav_url = f'https://www.google.com/maps/dir/?api=1&destination={shop_lat},{shop_lng}' if shop_lat and shop_lng else '#'
+        nav_url = (f'https://www.google.com/maps/dir/?api=1&destination={latitude},{longitude}'
+                   if latitude is not None and longitude is not None else '#')
 
         html = f'''<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -172,6 +195,7 @@ class LiffPagesController(http.Controller):
         """LIFF 診斷頁面 — 在 LINE 內開啟看 LIFF SDK 狀態"""
         ICP = request.env['ir.config_parameter'].sudo()
         liff_id = ICP.get_param('woow_odoo_line_liff.liff_id_member', '')
+        liff_id_js = json.dumps(liff_id).replace('</', '<\\/')
 
         html = f"""<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
@@ -188,8 +212,9 @@ var log = document.getElementById('log');
 function L(msg) {{ log.textContent += '\\n' + msg; }}
 function S(label, val, cls) {{ L('[' + (cls||'') + '] ' + label + ': ' + val); }}
 
-L('LIFF ID: {liff_id}');
-L('URL: ' + window.location.href);
+var liffId = {liff_id_js};
+L('LIFF ID: ' + liffId);
+L('Path: ' + window.location.pathname);
 L('UserAgent: ' + navigator.userAgent.substring(0, 80));
 L('');
 
@@ -199,7 +224,7 @@ if (typeof liff === 'undefined') {{
     S('SDK', 'loaded', 'ok');
     L('Calling liff.init()...');
 
-    liff.init({{ liffId: '{liff_id}' }}).then(function() {{
+    liff.init({{ liffId: liffId }}).then(function() {{
         S('init', 'SUCCESS', 'ok');
         S('isLoggedIn', liff.isLoggedIn());
         S('isInClient', liff.isInClient());
@@ -219,7 +244,7 @@ if (typeof liff === 'undefined') {{
         // ID Token
         try {{
             var idToken = liff.getIDToken();
-            S('getIDToken', idToken ? idToken.substring(0, 30) + '...' : 'null', idToken ? 'ok' : 'warn');
+            S('getIDToken', idToken ? 'present' : 'null', idToken ? 'ok' : 'warn');
         }} catch(e) {{
             S('getIDToken', 'ERROR: ' + e.message, 'fail');
         }}
@@ -227,7 +252,7 @@ if (typeof liff === 'undefined') {{
         // Access Token
         try {{
             var accessToken = liff.getAccessToken();
-            S('getAccessToken', accessToken ? accessToken.substring(0, 30) + '...' : 'null', accessToken ? 'ok' : 'warn');
+            S('getAccessToken', accessToken ? 'present' : 'null', accessToken ? 'ok' : 'warn');
         }} catch(e) {{
             S('getAccessToken', 'ERROR: ' + e.message, 'fail');
         }}
