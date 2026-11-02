@@ -13,6 +13,8 @@ from odoo.http import request, Response
 
 # 併發錯誤：讓它們往外傳播，讓 Odoo 的請求層重試整個 request，
 # 而不是在這裡吞掉（吞掉會關閉 Odoo 內建的交易重試）。
+# Context key read by im_livechat_ai: the message was already answered, record it only.
+SKIP_AI_CONTEXT_KEY = 'im_livechat_ai_skip'
 _CONCURRENCY_ERRORS = (psycopg2.errors.SerializationFailure,
                        psycopg2.errors.LockNotAvailable)
 
@@ -120,6 +122,8 @@ class LineWebhookController(http.Controller):
         event_type = event.get('type', '')
         source = event.get('source', {})
         line_uid = source.get('userId', '')
+        # Set by a handler that already answered this event (keyword auto-reply).
+        request._line_auto_replied = False
 
         try:
             with request.env.cr.savepoint():
@@ -138,11 +142,25 @@ class LineWebhookController(http.Controller):
 
         try:
             with request.env.cr.savepoint():
-                self._forward_to_livechat(event)
+                self._forward_to_livechat_marked(event)
         except _CONCURRENCY_ERRORS:
             raise
         except Exception:
             _logger.warning('LiveChat 轉發失敗', exc_info=True)
+
+    def _forward_to_livechat_marked(self, event):
+        """Forward the event; when a keyword auto-reply already answered it,
+        post it under the context key ``im_livechat_ai_skip`` so an AI Live
+        Chat (im_livechat_ai) records the message but does not answer it a
+        second time. Modules without that key simply ignore it."""
+        if not getattr(request, '_line_auto_replied', False):
+            return self._forward_to_livechat(event)
+        previous = dict(request.env.context)
+        request.update_context(**{SKIP_AI_CONTEXT_KEY: True})
+        try:
+            return self._forward_to_livechat(event)
+        finally:
+            request.update_env(context=previous)
 
     def _livechat_line_channels(self):
         """im_livechat.channel (sudo), or None if the LINE bridge fields are absent.
@@ -347,7 +365,8 @@ class LineWebhookController(http.Controller):
         response_text = self._match_keyword(text.strip())
 
         if response_text:
-            api_service.reply(reply_token, [{'type': 'text', 'text': response_text}])
+            if api_service.reply(reply_token, [{'type': 'text', 'text': response_text}]):
+                request._line_auto_replied = True
 
     def _handle_postback(self, event, line_uid):
         """處理 postback 事件（來自 Rich Menu 或 Flex Message 按鈕）
