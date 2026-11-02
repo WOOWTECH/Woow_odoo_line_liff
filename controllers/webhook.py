@@ -11,6 +11,8 @@ import psycopg2
 from odoo import http
 from odoo.http import request, Response
 
+from ..models.line_liff_config import parse_shop_coordinates
+
 # 併發錯誤：讓它們往外傳播，讓 Odoo 的請求層重試整個 request，
 # 而不是在這裡吞掉（吞掉會關閉 Odoo 內建的交易重試）。
 # Context key read by im_livechat_ai: the message was already answered, record it only.
@@ -492,7 +494,9 @@ class LineWebhookController(http.Controller):
             ICP = request.env['ir.config_parameter'].sudo()
             lat = ICP.get_param('woow_odoo_line_liff.shop_latitude', '')
             lng = ICP.get_param('woow_odoo_line_liff.shop_longitude', '')
-        if lat and lng:
+        coordinates = parse_shop_coordinates(lat, lng)
+        if coordinates:
+            lat, lng = coordinates
             nav_url = f'https://www.google.com/maps/dir/?api=1&destination={lat},{lng}'
             request.env['line.api.service'].sudo().reply(reply_token, [{
                 'type': 'text',

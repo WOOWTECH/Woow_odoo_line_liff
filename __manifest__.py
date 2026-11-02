@@ -49,6 +49,7 @@
         'views/line_insight_log_views.xml',
         'views/menus.xml',
         'views/portal_templates.xml',
+        'views/liff_bind_confirm.xml',
     ],
     'assets': {
         'web.assets_frontend': [

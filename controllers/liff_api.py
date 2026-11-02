@@ -8,6 +8,7 @@ import logging
 from odoo import http
 from odoo.http import request, Response
 
+
 _logger = logging.getLogger(__name__)
 
 
@@ -111,25 +112,30 @@ class LiffApiController(http.Controller):
             body = {}
 
         # 安全性：禁止指定任意 partner_id 綁定（防止帳號劫持）
-        # 僅允許自動建立或 email 匹配綁定
+        # 僅允許自動建立新聯絡人；email 對應到既有聯絡人要先收信確認
 
         # 自動建立
         email = line_user.email or ''
         name = line_user.display_name or 'LINE User'
 
         Partner = request.env['res.partner'].sudo()
-        if email:
-            partner = Partner.search([('email', '=', email)], limit=1)
-            if partner:
-                line_user.bind_partner(partner.id)
+        existing = line_user._partner_for_line_email(email)
+        if existing:
+            # LINE email 沒有本人保證：寄確認信到既有聯絡人的信箱，確認後才綁定。
+            # 回應不透露對方的 partner id／姓名。
+            sent, email_hint = line_user._request_bind_confirmation(existing)
+            if not sent:
                 return Response(
-                    json.dumps({
-                        'status': 'bound',
-                        'partner_id': partner.id,
-                        'partner_name': partner.name,
-                    }, ensure_ascii=False),
-                    content_type='application/json',
+                    json.dumps({'status': 'contact_store'}, ensure_ascii=False),
+                    status=409, content_type='application/json',
                 )
+            return Response(
+                json.dumps({
+                    'status': 'confirmation_sent',
+                    'email_hint': email_hint,
+                }, ensure_ascii=False),
+                status=202, content_type='application/json',
+            )
 
         partner = Partner.create({'name': name, 'email': email})
         line_user.bind_partner(partner.id)

@@ -7,6 +7,8 @@ import pytz
 
 from odoo import api, fields, models
 
+from .line_liff_config import parse_shop_coordinates
+
 _logger = logging.getLogger(__name__)
 
 # Grayscale palette (matches line.flex.factory in woow_line_base)
@@ -388,9 +390,11 @@ class LineFlexTemplate(models.AbstractModel):
         ]
 
         footer_buttons = []
-        shop_lat = self._get_config('woow_odoo_line_liff.shop_latitude')
-        shop_lng = self._get_config('woow_odoo_line_liff.shop_longitude')
-        if shop_lat and shop_lng:
+        coordinates = parse_shop_coordinates(
+            self._get_config('woow_odoo_line_liff.shop_latitude'),
+            self._get_config('woow_odoo_line_liff.shop_longitude'))
+        if coordinates:
+            shop_lat, shop_lng = coordinates
             footer_buttons.append({
                 'type': 'button',
                 'action': {

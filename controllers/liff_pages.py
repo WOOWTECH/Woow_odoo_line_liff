@@ -5,13 +5,14 @@
 import base64
 import json
 import logging
-import math
 from urllib.parse import urlsplit
 
 from markupsafe import escape
 
 from odoo import http
 from odoo.http import request
+
+from ..models.line_liff_config import parse_shop_coordinates
 
 _logger = logging.getLogger(__name__)
 
@@ -143,14 +144,7 @@ class LiffPagesController(http.Controller):
         shop_lng = ICP.get_param('woow_odoo_line_liff.shop_longitude', '')
         shop_hours = ICP.get_param('woow_odoo_line_liff.shop_opening_hours', '')
 
-        try:
-            latitude = float(shop_lat)
-            longitude = float(shop_lng)
-            if (not math.isfinite(latitude) or not math.isfinite(longitude)
-                    or not -90 <= latitude <= 90 or not -180 <= longitude <= 180):
-                raise ValueError('Invalid coordinates')
-        except (TypeError, ValueError):
-            latitude = longitude = None
+        latitude, longitude = parse_shop_coordinates(shop_lat, shop_lng) or (None, None)
 
         map_html = ''
         if latitude is not None and longitude is not None:

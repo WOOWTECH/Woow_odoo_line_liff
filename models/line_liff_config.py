@@ -2,12 +2,29 @@
 # woow_odoo_line_liff/models/line_liff_config.py
 # LINE LIFF 設定檔 — 多實體架構（類似 POS config）
 import logging
+import math
 
 from odoo import api, fields, models
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 
 _logger = logging.getLogger(__name__)
 
+
+
+def parse_shop_coordinates(latitude, longitude):
+    """店家座標：合法的有限數值且在經緯度範圍內才回傳 (lat, lng)，否則 None。
+
+    座標會被放進公開頁的 inline script、Flex 訊息的 URI 與導航連結；
+    所有讀取端都要經過這裡，不直接拼接設定值。
+    """
+    try:
+        lat, lng = float(latitude), float(longitude)
+    except (TypeError, ValueError):
+        return None
+    if not (math.isfinite(lat) and math.isfinite(lng)
+            and -90 <= lat <= 90 and -180 <= lng <= 180):
+        return None
+    return lat, lng
 
 class LineLiffConfig(models.Model):
     """LINE LIFF 設定檔
@@ -50,6 +67,13 @@ class LineLiffConfig(models.Model):
     shop_latitude = fields.Char('緯度')
     shop_longitude = fields.Char('經度')
     shop_opening_hours = fields.Char('營業時間')
+
+    @api.constrains('shop_latitude', 'shop_longitude')
+    def _check_shop_coordinates(self):
+        for config in self:
+            if (config.shop_latitude or config.shop_longitude) and not parse_shop_coordinates(
+                    config.shop_latitude, config.shop_longitude):
+                raise ValidationError('店家緯度／經度必須是數字（緯度 -90～90、經度 -180～180），且兩者都要填。')
 
     # ── 行為設定 ──
     auto_line_notify = fields.Boolean('自動 LINE 推播', default=False,

@@ -12,6 +12,8 @@ import time
 from odoo import http, SUPERUSER_ID
 from odoo.http import request
 from urllib.parse import urlencode
+from ..models.line_user import BIND_CONFIRM_TTL
+from .liff_bind_confirm import render_bind_page
 from .liff_sso_policy import (
     ADMIN_TARGETS_PARAM, BINDING_PARAM, BOOKING_INTENT_KEY_PARAM, BOOKING_RESUME_PATH_PARAM,
     allowed_target, binding_for_claims, consume_challenge, is_safe_local_path,
@@ -247,6 +249,17 @@ class LiffRedirectController(http.Controller):
             line_user = None
         if not line_user:
             return None, request.redirect('/web/login?error=user_creation_failed')
+
+        # LINE email 對應到既有聯絡人：寄確認信到那位聯絡人的信箱，確認前不發任何 session
+        if not line_user.partner_id:
+            existing = LineUser._partner_for_line_email(payload.get('email') or line_user.email)
+            if existing:
+                request.session.logout(keep_db=True)
+                sent, email_hint = line_user._request_bind_confirmation(existing)
+                if not sent:
+                    return None, render_bind_page('liff_bind_contact_store', {}, status=409)
+                return None, render_bind_page('liff_bind_email_sent', {
+                    'email_hint': email_hint, 'ttl_minutes': BIND_CONFIRM_TTL // 60})
 
         # 確保有對應的 portal user
         partner, user = self._ensure_portal_user(line_user, payload)
@@ -495,7 +508,7 @@ liff.init({{liffId:liffId}}).then(function(){{
 
         查找順序：
         1. line_user 已有 partner_id → 查 partner 的 user
-        2. 用 email 查現有 partner
+        2. email 對應到既有 partner → 拒絕（要先走確認信，見 _authenticate_liff_user）
         3. 建立新 partner + portal user
 
         :param line_user: line.user record
@@ -520,18 +533,10 @@ liff.init({{liffId:liffId}}).then(function(){{
             user = self._create_portal_user(partner, self._safe_login(line_user, email))
             return partner, user
 
-        # 情況 2：用 email 查現有 partner
-        if email:
-            partner = Partner.search([('email', '=', email)], limit=1)
-            if partner:
-                line_user.bind_partner(partner.id)
-                user, blocked = self._find_portal_user_for_partner(partner)
-                if blocked:
-                    return partner, None
-                if user:
-                    return partner, user
-                user = self._create_portal_user(partner, self._safe_login(line_user, email))
-                return partner, user
+        # 情況 2：email 對應到既有 partner → 必須先收信確認（_authenticate_liff_user 會先攔下
+        # 並寄確認信）。走到這裡代表呼叫端沒先檢查：fail closed，不綁定、也不另建同 email 的 partner。
+        if email and line_user._partner_for_line_email(email):
+            return None, None
 
         # 情況 3：建立新 partner + portal user
         # email 只用於真實信箱，placeholder 不設到 partner（避免佔走 email 欄位）
