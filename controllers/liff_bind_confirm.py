@@ -50,5 +50,6 @@ class LiffBindConfirmController(http.Controller):
                 'line_name': line_user.display_name or 'LINE',
                 'partner_name': partner.name or '',
             })
-        line_user._confirm_pending_bind(partner)
+        if not line_user._confirm_pending_bind(partner):
+            return render_bind_page('liff_bind_result', {'ok': False}, status=400)
         return render_bind_page('liff_bind_result', {'ok': True})

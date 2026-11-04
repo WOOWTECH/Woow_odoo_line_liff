@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 # woow_odoo_line_liff/tests/test_flex_template.py
 # Flex Message 模板結構驗證
+from datetime import datetime
 from unittest.mock import MagicMock
 
 from odoo.tests.common import TransactionCase
@@ -44,6 +45,8 @@ class TestFlexTemplate(TransactionCase):
     def test_build_booking_confirmed_structure(self):
         booking = MagicMock()
         booking.name = 'BK001'
+        # Odoo 的 Datetime 欄位是 naive UTC；MagicMock 預設會回傳 Mock，無法 localize
+        booking.write_date = datetime(2026, 11, 4, 8, 30)
         booking.id = 1
         booking.start_datetime = None
         booking.appointment_type_id.name = 'Test Service'
@@ -51,13 +54,15 @@ class TestFlexTemplate(TransactionCase):
         result = self.tmpl.build_booking_confirmed(booking)
         self._validate_bubble(result)
         self.assertIn('footer', result)
-        # 驗證有 action buttons
+        # 通用卡片的預設 action button：查看詳情
         footer_contents = result['footer']['contents']
-        self.assertTrue(len(footer_contents) >= 2)
+        self.assertEqual([b['action']['label'] for b in footer_contents], ['查看詳情'])
 
     def test_build_booking_cancelled_structure(self):
         booking = MagicMock()
         booking.name = 'BK002'
+        # Odoo 的 Datetime 欄位是 naive UTC；MagicMock 預設會回傳 Mock，無法 localize
+        booking.write_date = datetime(2026, 11, 4, 8, 30)
         booking.start_datetime = None
         booking.appointment_type_id.name = 'Test Service'
         result = self.tmpl.build_booking_cancelled(booking)
@@ -68,14 +73,17 @@ class TestFlexTemplate(TransactionCase):
     def test_build_booking_cancelled_with_reason(self):
         booking = MagicMock()
         booking.name = 'BK003'
+        # Odoo 的 Datetime 欄位是 naive UTC；MagicMock 預設會回傳 Mock，無法 localize
+        booking.write_date = datetime(2026, 11, 4, 8, 30)
         booking.start_datetime = None
         booking.appointment_type_id.name = 'Test Service'
         result = self.tmpl.build_booking_cancelled(booking, reason='客戶要求')
         body_contents = result['body']['contents']
-        # 有取消原因的 info_row
+        # 通用卡片的原因 info_row：標籤「原因」、值為傳入的取消原因
         has_reason = any(
             c.get('type') == 'box' and
-            any(sub.get('text', '').startswith('取消原因') for sub in c.get('contents', []) if sub.get('type') == 'text')
+            [sub.get('text') for sub in c.get('contents', []) if sub.get('type') == 'text']
+            == ['原因', '客戶要求']
             for c in body_contents
         )
         self.assertTrue(has_reason)
