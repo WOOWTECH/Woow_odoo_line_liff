@@ -58,7 +58,6 @@ class LineLiffConfig(models.Model):
     liff_id_member = fields.Char('LIFF ID - 會員中心',
         help='用於 Portal 登入跳轉的 LIFF App ID')
     liff_id_news = fields.Char('LIFF ID - 最新消息')
-    liff_id_locations = fields.Char('LIFF ID - 店家位置')
 
     # ── 店家資訊 ──
     shop_name = fields.Char('店家名稱')
@@ -93,7 +92,6 @@ class LineLiffConfig(models.Model):
     # ── 計算欄位（URL） ──
     webhook_url = fields.Char('Webhook URL', compute='_compute_urls')
     liff_endpoint_news = fields.Char('最新消息端點', compute='_compute_urls')
-    liff_endpoint_locations = fields.Char('店家位置端點', compute='_compute_urls')
 
     def _compute_urls(self):
         base_url = self.env['ir.config_parameter'].sudo().get_param(
@@ -101,7 +99,6 @@ class LineLiffConfig(models.Model):
         for rec in self:
             rec.webhook_url = f'{base_url}/line/webhook/{rec.id}' if base_url and rec.id else ''
             rec.liff_endpoint_news = f'{base_url}/liff/news' if base_url else ''
-            rec.liff_endpoint_locations = f'{base_url}/liff/locations' if base_url else ''
 
     # ── 自動同步到 ir.config_parameter ──
 
@@ -114,7 +111,6 @@ class LineLiffConfig(models.Model):
         'login_channel_secret': 'woow_line_base.login_channel_secret',
         'liff_id_member': 'woow_odoo_line_liff.liff_id_member',
         'liff_id_news': 'woow_odoo_line_liff.liff_id_news',
-        'liff_id_locations': 'woow_odoo_line_liff.liff_id_locations',
         'shop_name': 'woow_odoo_line_liff.shop_name',
         'shop_address': 'woow_odoo_line_liff.shop_address',
         'shop_phone': 'woow_odoo_line_liff.shop_phone',
@@ -222,8 +218,7 @@ class LineLiffConfig(models.Model):
         if not liff_id:
             return self.browse()
         return self.sudo().search([
-            '|', '|',
+            '|',
             ('liff_id_member', '=', liff_id),
             ('liff_id_news', '=', liff_id),
-            ('liff_id_locations', '=', liff_id),
         ], limit=1)

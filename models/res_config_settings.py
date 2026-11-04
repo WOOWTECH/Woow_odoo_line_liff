@@ -32,8 +32,6 @@ class ResConfigSettings(models.TransientModel):
         related='line_liff_config_id.liff_id_member', readonly=False)
     cfg_liff_id_news = fields.Char(
         related='line_liff_config_id.liff_id_news', readonly=False)
-    cfg_liff_id_locations = fields.Char(
-        related='line_liff_config_id.liff_id_locations', readonly=False)
     cfg_shop_name = fields.Char(
         related='line_liff_config_id.shop_name', readonly=False)
     cfg_shop_address = fields.Char(
@@ -58,5 +56,3 @@ class ResConfigSettings(models.TransientModel):
         related='line_liff_config_id.webhook_url')
     cfg_liff_endpoint_news = fields.Char(
         related='line_liff_config_id.liff_endpoint_news')
-    cfg_liff_endpoint_locations = fields.Char(
-        related='line_liff_config_id.liff_endpoint_locations')

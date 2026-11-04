@@ -26,10 +26,6 @@
             <field name="key">woow_odoo_line_liff.liff_id_news</field>
             <field name="value"></field>
         </record>
-        <record id="config_liff_id_locations" model="ir.config_parameter">
-            <field name="key">woow_odoo_line_liff.liff_id_locations</field>
-            <field name="value"></field>
-        </record>
 
         <!-- 店家資訊 -->
         <record id="config_shop_name" model="ir.config_parameter">

@@ -240,7 +240,6 @@ woow_odoo_line_liff/
 |       |   |-- liff.css           # LIFF page styles
 |       |-- js/
 |           |-- liff_helper.js     # WoowLiff global helper
-|           |-- liff_locations.js  # Leaflet map integration
 |
 |-- tests/
 |   |-- __init__.py
@@ -250,9 +249,6 @@ woow_odoo_line_liff/
 |
 |-- views/
     |-- assets.xml
-    |-- liff_base.xml
-    |-- liff_locations.xml
-    |-- liff_news.xml
     |-- line_audience_tag_views.xml
     |-- line_auto_reply_views.xml
     |-- line_insight_log_views.xml
@@ -291,7 +287,6 @@ woow_odoo_line_liff/
 | `login_channel_secret` | Char | Login Channel Secret |
 | `liff_id_member` | Char | LIFF ID for Portal login redirect |
 | `liff_id_news` | Char | LIFF ID for news page |
-| `liff_id_locations` | Char | LIFF ID for store locations page |
 | `shop_name` | Char | Store name |
 | `shop_address` | Char | Store address |
 | `shop_phone` | Char | Store phone |
@@ -308,7 +303,6 @@ woow_odoo_line_liff/
 | `follower_updated_at` | Datetime | Last stats sync time (readonly) |
 | `webhook_url` | Char | Computed: `{base_url}/line/webhook/{id}` |
 | `liff_endpoint_news` | Char | Computed: `{base_url}/liff/news` |
-| `liff_endpoint_locations` | Char | Computed: `{base_url}/liff/locations` |
 
 #### Key Methods
 
@@ -332,7 +326,6 @@ _SYNC_FIELDS = {
     'login_channel_secret':    'woow_line_base.login_channel_secret',
     'liff_id_member':          'woow_odoo_line_liff.liff_id_member',
     'liff_id_news':            'woow_odoo_line_liff.liff_id_news',
-    'liff_id_locations':       'woow_odoo_line_liff.liff_id_locations',
     'shop_name':               'woow_odoo_line_liff.shop_name',
     'shop_address':            'woow_odoo_line_liff.shop_address',
     'shop_phone':              'woow_odoo_line_liff.shop_phone',
@@ -948,7 +941,6 @@ Self-contained LIFF pages rendered as inline HTML (no dependency on website temp
 |-------|--------|------|-------------|
 | `/liff/news` | GET | `none` | News list/article page (supports `?article_id=N`) |
 | `/liff/news/image/<int:news_id>` | GET | `none` | Public news cover image (LINE-spec: HTTPS, max 1024x1024) |
-| `/liff/locations` | GET | `none` | Store location with Leaflet/OpenStreetMap map |
 | `/liff/clear-session` | GET | `none` | Clear broken session and redirect (recovery endpoint) |
 | `/liff/debug` | GET | `public` | LIFF SDK diagnostics page |
 
@@ -1000,13 +992,6 @@ Global `WoowLiff` object providing LIFF SDK wrapper functions:
 | `WoowLiff.close()` | Close LIFF window (in LINE app only) |
 | `WoowLiff.isInLine()` | Check if running inside LINE app |
 | `WoowLiff.isLiffMode()` | Check if URL has `?liff=1` parameter |
-
-### `js/liff_locations.js`
-
-Leaflet map initialization for the store locations page:
-- Reads `data-lat`, `data-lng`, `data-name` from `#liff-map` element
-- Uses custom brand-colored marker icon (`#B8956A`)
-- Falls back to Google Maps link if Leaflet fails to load
 
 ### `css/liff.css`
 
@@ -1147,7 +1132,6 @@ Default system parameters (all `noupdate="1"`):
 | `woow_line_base.admin_line_user_id` | (empty) | Admin LINE User ID |
 | `woow_odoo_line_liff.liff_id_member` | (empty) | LIFF ID for member/portal |
 | `woow_odoo_line_liff.liff_id_news` | (empty) | LIFF ID for news |
-| `woow_odoo_line_liff.liff_id_locations` | (empty) | LIFF ID for locations |
 | `woow_odoo_line_liff.shop_*` | (empty) | Shop info fields |
 | `woow_odoo_line_liff.rebook_path` | `/liff/redirect/book` | Rebooking path |
 | `woow_odoo_line_liff.richmenu_contact_text` | 歡迎直接傳訊息... | Contact reply text |
@@ -1400,7 +1384,7 @@ mail.notification.create() triggered
 - [ ] LINE Developers Console account with:
   - [ ] Messaging API channel (Channel ID, Secret, Access Token)
   - [ ] LINE Login channel (Channel ID, Secret)
-  - [ ] LIFF apps created (member, news, locations)
+  - [ ] LIFF apps created (member, news)
 - [ ] Python packages: `requests`, `pytz` (usually pre-installed)
 
 ### Installation Steps
@@ -1415,14 +1399,14 @@ mail.notification.create() triggered
 2. [ ] Create a `line.liff.config` record:
    - [ ] Fill Messaging API credentials (Channel ID, Secret, Access Token)
    - [ ] Fill LINE Login credentials (Channel ID, Secret)
-   - [ ] Fill LIFF IDs (member, news, locations)
+   - [ ] Fill LIFF IDs (member, news)
    - [ ] Fill shop info (name, address, phone, lat/lng, hours)
 3. [ ] Set Webhook URL in LINE Developers Console:
    - URL shown in config form: `{base_url}/line/webhook/{config_id}`
    - Enable webhook events: Follow, Unfollow, Message, Postback
 4. [ ] Create LIFF apps in LINE Developers Console:
-   - Type: Full (for member portal) or Tall (for news/locations)
-   - Endpoint URL: `{base_url}/liff/redirect` (member), `{base_url}/liff/news`, `{base_url}/liff/locations`
+   - Type: Full (for member portal) or Tall (for news)
+   - Endpoint URL: `{base_url}/liff/redirect` (member), `{base_url}/liff/news`
 5. [ ] Create and upload Rich Menu:
    - Design image (2500x1686 or 2500x843)
    - Define tap areas with actions
