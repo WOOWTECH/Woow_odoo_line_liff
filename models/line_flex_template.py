@@ -72,7 +72,7 @@ class LineFlexTemplate(models.AbstractModel):
     def _get_liff_id(self, page):
         """取得指定頁面的 LIFF ID
 
-        :param page: 頁面名稱（member / news / locations）
+        :param page: 頁面名稱（member / news）
         """
         key = f'woow_odoo_line_liff.liff_id_{page}'
         return self.env['ir.config_parameter'].sudo().get_param(key, '')

@@ -263,14 +263,9 @@ class TestShopCoordinates(TransactionCase):
 @tagged('post_install', '-at_install', 'line_ci')
 class TestPublicPageOutput(HttpCase):
 
-    def test_locations_page_drops_invalid_coordinates(self):
-        ICP = self.env['ir.config_parameter'].sudo()
-        ICP.set_param('woow_odoo_line_liff.shop_latitude', '1]);alert(1);//')
-        ICP.set_param('woow_odoo_line_liff.shop_longitude', '121.5')
-        page = self.url_open('/liff/locations')
-        self.assertEqual(page.status_code, 200)
-        self.assertNotIn('alert(1)', page.text)
-        self.assertNotIn('setView', page.text)
+    def test_locations_page_is_removed(self):
+        # 18.0.3.5.0: the store-locations page (Leaflet + OpenStreetMap tiles) was removed
+        self.assertEqual(self.url_open('/liff/locations').status_code, 404)
 
     def test_debug_page_encodes_liff_id(self):
         value = "x';alert(1)//</script>"

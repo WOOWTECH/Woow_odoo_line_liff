@@ -88,11 +88,6 @@
                                                class="col-lg-3 o_light_label"/>
                                         <field name="cfg_liff_id_news" class="col-lg-6"/>
                                     </div>
-                                    <div class="row mt16">
-                                        <label for="cfg_liff_id_locations" string="店家位置"
-                                               class="col-lg-3 o_light_label"/>
-                                        <field name="cfg_liff_id_locations" class="col-lg-6"/>
-                                    </div>
                                 </div>
                             </setting>
                             <setting string="端點 URL" help="貼到 LINE Developer Console">

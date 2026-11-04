@@ -485,6 +485,30 @@ class LineWebhookController(http.Controller):
             'text': f'請點擊連結重新預約：\n{rebook_url}',
         }])
 
+    def _reply_shop_location(self, reply_token):
+        """Rich menu「店家位置」：以文字回覆店家名稱、地址、電話、營業時間與 Google 地圖導航連結"""
+        config = getattr(request, '_line_config', None)
+        ICP = request.env['ir.config_parameter'].sudo()
+
+        def value(field):
+            stored = (getattr(config, field, '') or '') if config else ''
+            return stored or ICP.get_param(f'woow_odoo_line_liff.{field}', '')
+
+        name = value('shop_name')
+        lines = [f'店家位置：{name}' if name else '店家位置']
+        for label, field in (('地址', 'shop_address'), ('電話', 'shop_phone'), ('營業時間', 'shop_opening_hours')):
+            text = value(field)
+            if text:
+                lines.append(f'{label}：{text}')
+        coordinates = parse_shop_coordinates(value('shop_latitude'), value('shop_longitude'))
+        if coordinates:
+            lat, lng = coordinates
+            lines.append(f'Google 地圖導航：\nhttps://www.google.com/maps/dir/?api=1&destination={lat},{lng}')
+        request.env['line.api.service'].sudo().reply(reply_token, [{
+            'type': 'text',
+            'text': '\n'.join(lines),
+        }])
+
     def _postback_navigate(self, event, line_uid, params, reply_token):
         """Google Maps 導航（postback）"""
         config = getattr(request, '_line_config', None)
@@ -521,14 +545,18 @@ class LineWebhookController(http.Controller):
             }])
             return
 
+        if target == 'locations':
+            # 店家位置網頁（Leaflet＋OpenStreetMap 圖磚）已移除，改為直接回覆店家資訊與 Google 地圖導航連結
+            self._reply_shop_location(reply_token)
+            return
+
         target_labels = {
             'book': '立即預約',
             'my-bookings': '我的預約',
             'news': '最新消息',
-            'locations': '店家位置',
         }
         label = target_labels.get(target, '立即預約')
-        if target in ('news', 'locations'):
+        if target == 'news':
             url = flex_tmpl._liff_url(target)
         else:
             # Booking targets open through the member LIFF redirect bridge.

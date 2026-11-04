@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # woow_odoo_line_liff/controllers/liff_pages.py
 # 自建 LIFF 頁面 Controller
-# 渲染：最新消息 /liff/news、店家位置 /liff/locations
+# 渲染：最新消息 /liff/news（店家位置頁已移除：rich menu 改為直接回覆店家資訊與導航連結）
 import base64
 import json
 import logging
@@ -12,7 +12,6 @@ from markupsafe import escape
 from odoo import http
 from odoo.http import request
 
-from ..models.line_liff_config import parse_shop_coordinates
 
 _logger = logging.getLogger(__name__)
 
@@ -130,57 +129,6 @@ class LiffPagesController(http.Controller):
 </head><body>
 <div class="hdr">{escape(shop_name)} — 最新消息</div>
 <div style="background:#fff;max-width:600px;margin:0 auto;">{cards_html}</div>
-</body></html>'''
-        return request.make_response(html, headers=[('Content-Type', 'text/html')])
-
-    @http.route('/liff/locations', type='http', auth='none', csrf=False)
-    def liff_locations(self, **kwargs):
-        """店家位置頁（inline HTML，不依賴 website 模板）"""
-        ICP = request.env['ir.config_parameter'].sudo()
-        shop_name = ICP.get_param('woow_odoo_line_liff.shop_name', '')
-        shop_address = ICP.get_param('woow_odoo_line_liff.shop_address', '')
-        shop_phone = ICP.get_param('woow_odoo_line_liff.shop_phone', '')
-        shop_lat = ICP.get_param('woow_odoo_line_liff.shop_latitude', '')
-        shop_lng = ICP.get_param('woow_odoo_line_liff.shop_longitude', '')
-        shop_hours = ICP.get_param('woow_odoo_line_liff.shop_opening_hours', '')
-
-        latitude, longitude = parse_shop_coordinates(shop_lat, shop_lng) or (None, None)
-
-        map_html = ''
-        if latitude is not None and longitude is not None:
-            # json.dumps() 安全序列化成 JS 字串常值（處理引號/反斜線），
-            # 再把 </ 斷開避免內容含 </script> 提前關閉整個 <script> 區塊。
-            shop_name_js = json.dumps(shop_name).replace('</', '<\\/')
-            map_html = f'''
-            <div id="map" style="height:300px;background:#E5E5E5;"></div>
-            <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-            <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-            <script>
-            var m=L.map('map').setView([{latitude},{longitude}],16);
-            L.tileLayer('https://{{s}}.tile.openstreetmap.org/{{z}}/{{x}}/{{y}}.png',{{maxZoom:19}}).addTo(m);
-            L.marker([{latitude},{longitude}]).addTo(m).bindPopup({shop_name_js}).openPopup();
-            </script>'''
-        nav_url = (f'https://www.google.com/maps/dir/?api=1&destination={latitude},{longitude}'
-                   if latitude is not None and longitude is not None else '#')
-
-        html = f'''<!DOCTYPE html>
-<html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>店家位置 | {escape(shop_name)}</title>
-<style>body{{margin:0;font-family:'Noto Sans TC',sans-serif;background:#F5F5F5;color:#333;}}
-.hdr{{background:#1A1A1A;color:#fff;padding:16px 20px;font-size:16px;font-weight:bold;}}
-.info{{padding:16px 20px;background:#fff;margin:8px 0;}}
-.row{{display:flex;padding:8px 0;border-bottom:1px solid #E5E5E5;}}
-.label{{color:#999;width:80px;flex-shrink:0;}} .val{{color:#333;}}
-.btn{{display:block;text-align:center;background:#333;color:#fff;padding:12px;margin:16px 20px;text-decoration:none;border-radius:4px;}}</style>
-</head><body>
-<div class="hdr">{escape(shop_name)} — 店家位置</div>
-{map_html}
-<div class="info">
-    <div class="row"><span class="label">地址</span><span class="val">{escape(shop_address) if shop_address else '-'}</span></div>
-    <div class="row"><span class="label">電話</span><span class="val">{escape(shop_phone) if shop_phone else '-'}</span></div>
-    <div class="row"><span class="label">營業時間</span><span class="val">{escape(shop_hours) if shop_hours else '-'}</span></div>
-</div>
-<a class="btn" href="{escape(nav_url)}">Google 地圖導航</a>
 </body></html>'''
         return request.make_response(html, headers=[('Content-Type', 'text/html')])
 
