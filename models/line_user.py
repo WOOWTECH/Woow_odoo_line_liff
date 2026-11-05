@@ -193,6 +193,8 @@ class LineUserBridge(models.Model):
             return empty
         if line_user.pending_bind_partner_id != partner or self._is_staff_partner(partner):
             return empty
+        if line_user._partner_bound_to_other_line_user(partner):
+            return empty
         if line_user.partner_id and line_user.partner_id != partner:
             return empty
         return line_user, partner
@@ -202,6 +204,11 @@ class LineUserBridge(models.Model):
         """有內部（非 share）使用者的聯絡人：不走自助確認信，請店家處理。"""
         return bool(partner.sudo().with_context(active_test=False).user_ids.filtered(
             lambda user: not user.share))
+
+    def _partner_bound_to_other_line_user(self, partner):
+        """聯絡人已綁定另一個 LINE 帳號：不走自助確認信，請店家處理。"""
+        self.ensure_one()
+        return bool(partner.sudo().with_context(active_test=False).line_user_ids - self)
 
     def _request_bind_confirmation(self, partner):
         """寄確認連結到 partner 的信箱；10 分鐘內對同一位聯絡人不重寄。
@@ -218,6 +225,10 @@ class LineUserBridge(models.Model):
         email_hint = mask_email(email_normalize(partner.email or '') or '')
         if not partner.email or self._is_staff_partner(partner):
             _logger.info('LINE %s：email 對應到員工或無信箱的聯絡人 id=%s，不寄自助確認信',
+                         line_user.line_user_id, partner.id)
+            return False, email_hint
+        if line_user._partner_bound_to_other_line_user(partner):
+            _logger.info('LINE %s：聯絡人 id=%s 已綁定其他 LINE 帳號，不寄自助確認信',
                          line_user.line_user_id, partner.id)
             return False, email_hint
         now = fields.Datetime.now()
@@ -262,6 +273,11 @@ class LineUserBridge(models.Model):
         """收信者按下確認之後：綁定並清掉待確認狀態。"""
         self.ensure_one()
         line_user = self.sudo()
+        if line_user._partner_bound_to_other_line_user(partner):
+            line_user.write({'pending_bind_partner_id': False, 'pending_bind_sent_at': False})
+            _logger.info('LINE %s：聯絡人 id=%s 已綁定其他 LINE 帳號，不綁定',
+                         line_user.line_user_id, partner.id)
+            return False
         line_user.bind_partner(partner.id)
         line_user.write({'pending_bind_partner_id': False, 'pending_bind_sent_at': False})
         _logger.info('LINE %s：信箱確認後綁定 partner id=%s', line_user.line_user_id, partner.id)

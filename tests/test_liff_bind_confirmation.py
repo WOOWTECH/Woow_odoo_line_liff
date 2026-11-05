@@ -128,6 +128,68 @@ class TestBindConfirmationToken(TransactionCase):
 
 
 @tagged('post_install', '-at_install', 'line_ci')
+class TestBindConfirmationPartnerAlreadyBound(TransactionCase):
+    """聯絡人已綁定另一個 LINE 帳號時，不可再走自助確認信綁第二個。"""
+
+    def setUp(self):
+        super().setUp()
+        patcher = patch(MOCK_SEND, autospec=True, return_value=True)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+        LineUser = self.env['line.user'].sudo()
+        # 先到者：上游 woow_line_base 為新 email 建立並綁定聯絡人
+        self.first = LineUser.create_or_update_from_liff(
+            {'sub': 'U' + 'a1' * 16, 'name': 'First', 'email': VICTIM_EMAIL})
+        self.partner = self.first.partner_id
+        # 後到者：email 對應到既有聯絡人，維持未綁定
+        self.second = LineUser.create_or_update_from_liff(
+            {'sub': 'U' + 'b2' * 16, 'name': 'Second', 'email': VICTIM_EMAIL})
+
+    def test_precondition(self):
+        self.assertTrue(self.partner)
+        self.assertFalse(self.second.partner_id)
+        self.assertEqual(self.partner.line_user_ids, self.first)
+
+    def test_no_confirmation_mail_for_partner_bound_to_other_line_user(self):
+        sent, hint = self.second._request_bind_confirmation(self.partner)
+        self.assertFalse(sent)
+        self.assertEqual(hint, 'v***@example.com')
+        self.assertFalse(_sent_tokens(self.env, VICTIM_EMAIL))
+        self.assertFalse(self.second.pending_bind_partner_id)
+
+    def test_token_issued_before_other_binding_is_rejected(self):
+        # 寄信之後才有別的 LINE 帳號綁上來：繞過 request 直接寫入待確認狀態
+        self.second.sudo().write({'pending_bind_partner_id': self.partner.id})
+        token = self.second._make_bind_confirmation_token(self.partner)
+        self.assertEqual(self.env['line.user']._check_bind_confirmation_token(token),
+                         (self.env['line.user'].browse(), self.env['res.partner'].browse()))
+
+    def test_confirm_does_not_add_second_binding(self):
+        self.second.sudo().write({'pending_bind_partner_id': self.partner.id})
+        self.second._confirm_pending_bind(self.partner)
+        self.assertEqual(self.partner.line_user_ids, self.first)
+        self.assertFalse(self.second.partner_id)
+        self.assertFalse(self.second.pending_bind_partner_id)
+
+    def test_unbound_partner_still_gets_mail_and_binds(self):
+        """正向對照：聯絡人沒綁任何 LINE 帳號時，流程與修正前相同。"""
+        free = self.env['res.partner'].sudo().create(
+            {'name': 'Free Customer', 'email': 'free.customer@example.com'})
+        sent, _hint = self.second._request_bind_confirmation(free)
+        self.assertTrue(sent)
+        token = _sent_tokens(self.env, 'free.customer@example.com')[0]
+        line_user, partner = self.second._check_bind_confirmation_token(token)
+        self.assertEqual((line_user, partner), (self.second, free))
+        line_user._confirm_pending_bind(partner)
+        self.assertEqual(free.line_user_ids, self.second)
+
+    def test_same_line_user_may_reconfirm_its_own_partner(self):
+        """正向對照：已綁定本人的聯絡人不算「綁定給別人」。"""
+        sent, _hint = self.first._request_bind_confirmation(self.partner)
+        self.assertTrue(sent)
+
+
+@tagged('post_install', '-at_install', 'line_ci')
 class TestBindConfirmationOverHttp(HttpCase):
 
     def setUp(self):
@@ -242,6 +304,29 @@ class TestBindConfirmationOverHttp(HttpCase):
         # woow_line_base 在驗證 LINE 用戶時就已為新 email 建立並綁定聯絡人
         self.assertEqual(response.json()['status'], 'already_bound')
         self.assertEqual(self._line_user().partner_id.email, 'brand-new@example.com')
+
+    def test_confirm_post_refused_when_partner_bound_to_other_line_user(self):
+        other = self.env['line.user'].sudo().create(
+            {'line_user_id': 'U' + 'c3' * 16, 'display_name': 'Earlier'})
+        self._liff_login()
+        token = _sent_tokens(self.env, VICTIM_EMAIL)[0]
+        # 寄信之後，聯絡人被另一個 LINE 帳號綁走
+        other.bind_partner(self.victim.id)
+        page = self.url_open('/liff/bind/confirm?token=' + quote(token))
+        self.assertEqual(page.status_code, 400, page.text[:300])
+        self.assertIn('連結無效', page.text)
+        self.assertFalse(self._line_user().partner_id)
+        self.assertEqual(self.victim.line_user_ids, other)
+
+    def test_liff_login_with_partner_bound_to_other_line_user_asks_for_store(self):
+        other = self.env['line.user'].sudo().create(
+            {'line_user_id': 'U' + 'c3' * 16, 'display_name': 'Earlier'})
+        other.bind_partner(self.victim.id)
+        response = self._liff_login()
+        self.assertEqual(response.status_code, 409, response.text[:300])
+        self.assertFalse(_sent_tokens(self.env, VICTIM_EMAIL))
+        self.assertFalse(self._line_user().partner_id)
+        self.assertNotEqual(self._session_uid(), self.victim_user.id)
 
 
 @tagged('post_install', '-at_install', 'line_ci')
