@@ -752,6 +752,8 @@ The `write()` method is overridden: when `current_richmenu_id` changes, `_sync_r
 
 All fields are `related` to `line_liff_config_id.<field_name>` with `readonly=False`, allowing direct editing from the Settings page.
 
+The channel secrets and the Messaging access token (`cfg_messaging_channel_secret`, `cfg_messaging_access_token`, `cfg_login_channel_secret`) are restricted to `base.group_system`: related fields are computed as superuser, so without the group any logged-in user could obtain them through `res.config.settings` RPC calls (since 18.0.3.5.2).
+
 ---
 
 ### 14. `line.event.log` -- Webhook Event Log
