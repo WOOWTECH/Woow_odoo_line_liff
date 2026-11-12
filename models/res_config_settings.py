@@ -18,16 +18,21 @@ class ResConfigSettings(models.TransientModel):
     )
 
     # ── related 到選中的 config（可直接編輯） ──
+    # 金鑰欄位限系統管理員：related 欄位以 superuser 計算，任何登入者（含 LIFF 自動建立的
+    # portal 帳號）都能經 RPC 對 res.config.settings 要新紀錄的值；沒有 groups 就會拿到金鑰。
     cfg_messaging_channel_id = fields.Char(
         related='line_liff_config_id.messaging_channel_id', readonly=False)
     cfg_messaging_channel_secret = fields.Char(
-        related='line_liff_config_id.messaging_channel_secret', readonly=False)
+        related='line_liff_config_id.messaging_channel_secret', readonly=False,
+        groups='base.group_system')
     cfg_messaging_access_token = fields.Char(
-        related='line_liff_config_id.messaging_access_token', readonly=False)
+        related='line_liff_config_id.messaging_access_token', readonly=False,
+        groups='base.group_system')
     cfg_login_channel_id = fields.Char(
         related='line_liff_config_id.login_channel_id', readonly=False)
     cfg_login_channel_secret = fields.Char(
-        related='line_liff_config_id.login_channel_secret', readonly=False)
+        related='line_liff_config_id.login_channel_secret', readonly=False,
+        groups='base.group_system')
     cfg_liff_id_member = fields.Char(
         related='line_liff_config_id.liff_id_member', readonly=False)
     cfg_liff_id_news = fields.Char(
