@@ -209,29 +209,94 @@ class LineRichMenu(models.Model):
         _logger.info('Rich Menu 建立成功: %s → %s', self.name, richmenu_id)
         return self._upload_success_notification(richmenu_id)
 
+    # 重新上傳時逐一查 LINE 的人數上限；超過就保留舊選單（見 action_reupload_to_line）
+    _REUPLOAD_LOOKUP_LIMIT = 500
+
+    def _tab_group(self):
+        """以「切換 Rich Menu」按鈕互相連起來的整組選單（含 self）。
+
+        A 的某一格切換到別名 X、X 指向 B，就把 A、B 視為同一組；沿著兩個方向
+        一路展開。官方帳號的使用者在 LINE 上自己點分頁切換時，LINE 會把他個別
+        綁到目標選單，Odoo 不會知道——所以重新上傳某一個分頁時，整組選單上的人
+        都可能正停在這個分頁。
+        """
+        self.ensure_one()
+        Menu = self.sudo().with_context(active_test=False)
+        Alias = self.env['line.richmenu.alias'].sudo()
+        group = Menu.browse(self.id)
+        frontier = group
+        while frontier:
+            targets = frontier.area_ids.filtered(
+                lambda a: a.action_type == 'richmenuswitch')
+            alias_values = {a._get_action_value() for a in targets} - {''}
+            forward = Alias.search([('alias_id', 'in', list(alias_values))]).richmenu_id
+            own_aliases = frontier.alias_ids.mapped('alias_id')
+            backward = Menu.search([
+                ('area_ids.action_type', '=', 'richmenuswitch'),
+                '|', ('area_ids.action_value', 'in', own_aliases),
+                ('area_ids.action_richmenu_alias', 'in', own_aliases),
+            ]) if own_aliases else Menu
+            frontier = (forward | backward) - group
+            group |= frontier
+        return group
+
+    def _reupload_candidates(self, group):
+        """可能正停在 self 舊版上的 LINE 使用者。
+
+        - Odoo 記錄綁在這一組任一選單上的人；
+        - 這一組包含預設選單時，沒有個別綁定的人也可能從預設選單切過來。
+        """
+        LineUser = self.env['line.user'].sudo().with_context(active_test=False)
+        base = [('is_follower', '=', True), ('line_user_id', '!=', False)]
+        domain = base + [('current_richmenu_id', 'in', group.ids)]
+        if any(group.mapped('is_default')):
+            domain = base + ['|', ('current_richmenu_id', 'in', group.ids),
+                             ('current_richmenu_id', '=', False)]
+        return LineUser.search(domain)
+
     def action_reupload_to_line(self):
-        """重新上傳 Rich Menu 到 LINE（先建好新的 → 成功後才刪舊的 → 重新綁定用戶）
+        """重新上傳 Rich Menu 到 LINE（先建好新的 → 改指別名 → 重新綁定用戶 → 才刪舊的）
 
         H-7：舊版先刪 LINE 上的選單再重建；重建失敗（tap area 不合法、圖片
         太大或比例不對）時 Odoo 會 rollback，但 LINE 上的刪除沒辦法復原——
         結果是所有好友都失去選單，Odoo 卻還顯示為啟用中。新順序：新選單建好
         （create → 上傳圖片 → 設預設/別名）才刪舊的；建立失敗就保留舊選單原
         封不動，並把 LINE 的實際錯誤訊息秀給使用者。
+
+        2026-11-17（evergreen 幹部選單兩次掉回一般選單）：
+        - 指向這個選單的別名要改指到新選單，否則分頁切換會切到已刪除的選單；
+        - 使用者在 LINE 上自己點分頁切換，Odoo 的 current_richmenu_id 不會變。
+          舊版只重新綁定 current_richmenu_id == self 的人，正停在這個分頁、
+          但 Odoo 記在另一個分頁的人，舊選單一刪就掉回預設選單。現在整組分頁
+          上的人都向 LINE 查一次實際綁定，綁在舊選單上的人全部重新綁定；
+        - 任何一步沒有成功（別名、綁定、查不完），就不刪舊選單，留著讓使用者
+          繼續有選單可用，並在通知裡說明。
         """
         self.ensure_one()
         api = self.env['line.api.service']
 
         old_richmenu_id = self.line_richmenu_id
         was_default = self.is_default
-        # 找出所有綁定此 Rich Menu 的用戶（reupload 後需要重新綁定）
-        linked_users = self.env['line.user'].search([
-            ('current_richmenu_id', '=', self.id),
-            ('is_follower', '=', True),
-            ('line_user_id', '!=', False),
-        ])
+        group = self._tab_group()
+        candidates = self._reupload_candidates(group) if old_richmenu_id else \
+            self.env['line.user'].sudo().search([
+                ('current_richmenu_id', '=', self.id), ('is_follower', '=', True),
+                ('line_user_id', '!=', False)])
+        lookup_complete = len(candidates) <= self._REUPLOAD_LOOKUP_LIMIT
 
         # 先建好新的；失敗會拋 UserError，這裡完全沒動到舊選單
         new_richmenu_id = self._build_and_upload_to_line()
+
+        # 別名先改指到新選單；改不了就刪掉剛建的新選單，舊選單原封不動
+        line_aliases = self.alias_ids.filtered('line_alias_id')
+        for done, alias in enumerate(line_aliases):
+            if not api.richmenu_update_alias(alias.alias_id, new_richmenu_id):
+                for previous in line_aliases[:done]:
+                    api.richmenu_update_alias(previous.alias_id, old_richmenu_id)
+                api.richmenu_delete(new_richmenu_id)
+                raise UserError(
+                    f'別名「{alias.alias_id}」改指到新選單失敗，已取消這次重新上傳，'
+                    '舊選單維持不變。')
 
         self.write({
             'line_richmenu_id': new_richmenu_id,
@@ -243,21 +308,54 @@ class LineRichMenu(models.Model):
         if was_default:
             self.action_set_as_default()
 
-        # 重新綁定所有之前指定的用戶
-        if linked_users:
-            uids = linked_users.mapped('line_user_id')
-            for i in range(0, len(uids), 500):
-                batch = uids[i:i + 500]
-                api.richmenu_link_to_users(new_richmenu_id, batch)
-            _logger.info(
-                'Rich Menu reupload: 重新綁定 %d 位用戶 → %s',
-                len(uids), self.name)
+        # 找出實際停在舊選單上的人：Odoo 記在 self 的人一定要接回來；
+        # 同一組其他分頁的人，向 LINE 查到綁在舊選單上才接回來
+        to_relink = self.env['line.user']
+        if old_richmenu_id and lookup_complete:
+            for user in candidates:
+                linked = api.richmenu_get_user_menu(user.line_user_id)
+                if linked == old_richmenu_id or (
+                        linked is None and user.current_richmenu_id == self):
+                    to_relink |= user
+        else:
+            to_relink = candidates.filtered(lambda u: u.current_richmenu_id == self)
 
-        # 新選單已經生效，這時候才刪舊的
-        if old_richmenu_id:
+        relink_ok = True
+        if to_relink:
+            uids = to_relink.mapped('line_user_id')
+            for i in range(0, len(uids), 500):
+                if not api.richmenu_link_to_users(new_richmenu_id, uids[i:i + 500]):
+                    relink_ok = False
+            _logger.info(
+                'Rich Menu reupload: 重新綁定 %d 位用戶 → %s（%s）',
+                len(uids), self.name, 'ok' if relink_ok else '部份失敗')
+
+        # 新選單已經生效、停在舊選單的人都接回來了，這時候才刪舊的
+        kept_reason = None
+        if not old_richmenu_id:
+            pass
+        elif not lookup_complete:
+            kept_reason = (f'可能停在這個選單上的人超過 {self._REUPLOAD_LOOKUP_LIMIT} 位，'
+                           '無法逐一確認')
+        elif not relink_ok:
+            kept_reason = '有使用者重新綁定失敗'
+        if old_richmenu_id and not kept_reason:
             api.richmenu_delete(old_richmenu_id)
             _logger.info('Rich Menu 已刪除舊版: %s', old_richmenu_id)
-
+        if kept_reason:
+            _logger.warning('Rich Menu reupload: 保留舊版 %s（%s）', old_richmenu_id, kept_reason)
+            return {
+                'type': 'ir.actions.client',
+                'tag': 'display_notification',
+                'params': {
+                    'title': 'Rich Menu',
+                    'message': (f'已建立並上傳新選單（{new_richmenu_id}），別名已改指到新選單；'
+                                f'因為{kept_reason}，LINE 上的舊選單（{old_richmenu_id}）先保留，'
+                                '還停在舊選單上的人仍有選單可用。'),
+                    'type': 'warning',
+                    'sticky': True,
+                },
+            }
         return self._upload_success_notification(new_richmenu_id)
 
     def action_set_as_default(self):

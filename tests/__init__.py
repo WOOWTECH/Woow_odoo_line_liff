@@ -27,3 +27,4 @@ from . import test_push_log_and_insight
 from . import test_webhook_skip_ai
 from . import test_liff_bind_confirmation
 from . import test_settings_secret_access
+from . import test_richmenu_reupload_tabs
