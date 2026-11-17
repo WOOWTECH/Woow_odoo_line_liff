@@ -369,7 +369,7 @@ _SYNC_FIELDS = {
 | Method | Description |
 |--------|-------------|
 | `action_create_on_line()` | Build menu JSON, call `richmenu_create()`, upload image |
-| `action_reupload_to_line()` | Delete old on LINE, create new, re-apply default if needed |
+| `action_reupload_to_line()` | Build the new menu first, repoint its aliases, re-apply default if needed, re-link everyone LINE shows on the old menu across the whole tab group (people who tapped over to this tab are linked by LINE, not in Odoo), and only then delete the old menu. If an alias update fails the new menu is removed and nothing changes; if a re-link fails or more than 500 people would need checking, the old menu is kept and a warning is shown (since 18.0.3.5.3) |
 | `action_set_as_default()` | Set as default for all users, unset others |
 | `action_clear_default()` | Remove default status |
 | `action_link_to_users()` | Open user selection wizard for per-user assignment |
