@@ -2,6 +2,7 @@
 # woow_odoo_line_liff/models/line_flex_template.py
 # LINE Flex Message 模板工廠（AbstractModel）
 # 集中管理所有 Flex Message 版型，方便維護與擴充
+import datetime
 import logging
 import pytz
 
@@ -259,9 +260,12 @@ class LineFlexTemplate(models.AbstractModel):
         """
         # 時間戳
         timestamp = ''
-        if booking.write_date:
+        if isinstance(booking.write_date, datetime.datetime):
             tz = pytz.timezone('Asia/Taipei')
-            local_dt = pytz.utc.localize(booking.write_date).astimezone(tz)
+            write_date = booking.write_date
+            if write_date.tzinfo is None:
+                write_date = pytz.utc.localize(write_date)
+            local_dt = write_date.astimezone(tz)
             timestamp = local_dt.strftime('%Y/%m/%d %H:%M')
 
         # 表單類型

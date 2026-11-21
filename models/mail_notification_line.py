@@ -73,6 +73,9 @@ class MailNotificationLine(models.Model):
                 if not line_users:
                     continue
 
+                if self._line_auto_push_skip(notif, msg, partner, line_users):
+                    continue
+
                 seen_messages.add(dedupe_key)
 
                 flex, alt_text = factory.build_tracking_notification(msg, partner)
@@ -94,3 +97,7 @@ class MailNotificationLine(models.Model):
                 _logger.exception(
                     'LINE auto-push failed: notification %s', notif.id,
                 )
+
+    def _line_auto_push_skip(self, notification, message, partner, line_users):
+        """Return whether a downstream module owns the push for this event."""
+        return False

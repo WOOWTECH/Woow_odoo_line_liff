@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 # woow_odoo_line_liff/tests/test_flex_template.py
 # Flex Message 模板結構驗證
-from datetime import datetime
+from datetime import datetime, timezone
 from unittest.mock import MagicMock
 
 from odoo.tests.common import TransactionCase
@@ -57,6 +57,16 @@ class TestFlexTemplate(TransactionCase):
         # 通用卡片的預設 action button：查看詳情
         footer_contents = result['footer']['contents']
         self.assertEqual([b['action']['label'] for b in footer_contents], ['查看詳情'])
+
+    def test_build_booking_confirmed_accepts_timezone_aware_write_date(self):
+        booking = MagicMock()
+        booking.name = 'BK-AWARE'
+        booking.write_date = datetime(2026, 11, 4, 8, 30, tzinfo=timezone.utc)
+        booking.id = 1
+        booking.start_datetime = None
+        booking.appointment_type_id.name = 'Test Service'
+        result = self.tmpl.build_booking_confirmed(booking)
+        self._validate_bubble(result)
 
     def test_build_booking_cancelled_structure(self):
         booking = MagicMock()
