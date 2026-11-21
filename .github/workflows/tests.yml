@@ -40,10 +40,10 @@ jobs:
         include:
           - state: stock-livechat
             modules: "woow_line_base,woow_odoo_line_liff,im_livechat,calendar,sale_management"
-            min_tests: "140"
+            min_tests: "144"
           - state: with-line-livechat
             modules: "woow_line_base,woow_odoo_line_liff,woow_odoo_livechat_line"
-            min_tests: "140"
+            min_tests: "144"
     container:
       image: odoo:18
       options: --user root

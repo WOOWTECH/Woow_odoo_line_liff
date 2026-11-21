@@ -1,6 +1,6 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 from contextlib import nullcontext
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 from odoo.addons.woow_odoo_line_liff.controllers.liff_redirect import (
     LiffRedirectController,
@@ -24,7 +24,9 @@ class TestDownstreamExtensionHooks(TransactionCase):
 
         request_path = (
             'odoo.addons.woow_odoo_line_liff.controllers.webhook.request')
-        with patch(request_path) as mocked_request, \
+        # Supplying the replacement avoids mock introspecting an unbound
+        # Werkzeug LocalProxy before an HTTP request exists.
+        with patch(request_path, new=MagicMock()) as mocked_request, \
              patch.object(controller, '_prepare_event_line_user',
                           side_effect=lambda *args: calls.append('prepare')), \
              patch.object(controller, '_log_event') as log, \
