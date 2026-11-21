@@ -129,6 +129,7 @@ class LineWebhookController(http.Controller):
 
         try:
             with request.env.cr.savepoint():
+                self._prepare_event_line_user(event, event_type, line_uid)
                 log = self._log_event(event, event_type, line_uid)
                 handler = getattr(self, f'_handle_{event_type}', None)
                 if handler:
@@ -149,6 +150,16 @@ class LineWebhookController(http.Controller):
             raise
         except Exception:
             _logger.warning('LiveChat 轉發失敗', exc_info=True)
+
+    def _prepare_event_line_user(self, event, event_type, line_uid):
+        """Extension hook run before an event is logged and dispatched.
+
+        A site module may ensure a sender known before this database existed
+        has a ``line.user`` row.  The shared default deliberately does nothing.
+        Ordinary failures should be handled by the override; concurrency errors
+        may propagate so Odoo can retry the request.
+        """
+        return None
 
     def _forward_to_livechat_marked(self, event):
         """Forward the event; when a keyword auto-reply already answered it,

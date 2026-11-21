@@ -81,6 +81,15 @@ class LiffRedirectController(http.Controller):
         'invoices': '/my/invoices',
     }
 
+    def _get_bridge_base_path(self):
+        """Return the route used by the LIFF bridge GET/POST round trip.
+
+        Site modules may override this to use a configuration-scoped member
+        route.  Identity validation, target allow-listing, challenge handling,
+        and session hardening remain in this shared controller.
+        """
+        return '/liff/redirect'
+
     # ------------------------------------------------------------------
     # 共用認證邏輯（DRY：從 liff_redirect + liff_redirect_booking 提取）
     # ------------------------------------------------------------------
@@ -198,11 +207,11 @@ class LiffRedirectController(http.Controller):
                 '<script src="https://static.line-scdn.net/liff/edge/2/sdk.js"></script>'
                 '<script>'
                 '(function(){'
-                'var liffId=__LIFFID__;var target=__TARGET__;var nonceSuffix=__NONCE_SUFFIX__;'
+                'var liffId=__LIFFID__;var target=__TARGET__;var nonceSuffix=__NONCE_SUFFIX__;var bridgeBase=__BASE_PATH__;'
                 "if(typeof liff==='undefined'||!liffId){window.location.href='/web/login?error=invalid_token';return;}"
                 'liff.init({liffId:liffId}).then(function(){'
                 'try{liff.logout();}catch(e){}'
-                "liff.login({redirectUri:window.location.origin+'/liff/redirect/'+target+nonceSuffix});"
+                "liff.login({redirectUri:window.location.origin+bridgeBase+'/'+target+nonceSuffix});"
                 "}).catch(function(){window.location.href='/web/login?error=invalid_token';});"
                 '})();'
                 '</script></body></html>'
@@ -213,7 +222,8 @@ class LiffRedirectController(http.Controller):
             html = html.replace(
                 '__LIFFID__', _json_for_script(self._get_liff_id())
             ).replace('__TARGET__', _json_for_script(safe_target)).replace(
-                '__NONCE_SUFFIX__', _json_for_script(nonce_suffix))
+                '__NONCE_SUFFIX__', _json_for_script(nonce_suffix)).replace(
+                '__BASE_PATH__', _json_for_script(self._get_bridge_base_path()))
             return None, request.make_response(html, headers=[
                 ('Content-Type', 'text/html; charset=utf-8'),
                 ('Content-Security-Policy', _LIFF_BRIDGE_CSP),
@@ -431,6 +441,7 @@ var bookingNonce={_json_for_script(booking_nonce)};
 var loginState={_json_for_script(login_state)};
 var fallbacks={_json_for_script(direct_urls)};
 var liffId={_json_for_script(liff_id)};
+var bridgeBase={_json_for_script(self._get_bridge_base_path())};
 var $st=document.getElementById('st');
 var $er=document.getElementById('er');
 var $sp=document.getElementById('sp');
@@ -438,7 +449,7 @@ function showErr(msg){{$sp.style.display='none';$st.textContent='登入失敗';$
 var target=serverTarget;
 sessionStorage.removeItem('liff_target');
 function bookingRedirectUri(){{
-  var url=window.location.origin+'/liff/redirect/'+target;
+  var url=window.location.origin+bridgeBase+'/'+target;
   return bookingNonce ? url+'?booking_nonce='+encodeURIComponent(bookingNonce) : url;
 }}
 function fb(reason){{
@@ -456,7 +467,7 @@ liff.init({{liffId:liffId}}).then(function(){{
   try{{a=liff.getAccessToken();}}catch(e){{}}
   if(!t&&!a){{fb('無法取得 LINE Token（ID Token 和 Access Token 皆為空）');return;}}
   sessionStorage.removeItem('liff_target');
-  var f=document.createElement('form');f.method='POST';f.action='/liff/redirect/'+target;
+  var f=document.createElement('form');f.method='POST';f.action=bridgeBase+'/'+target;
   var stateInput=document.createElement('input');stateInput.type='hidden';stateInput.name='login_state';stateInput.value=loginState;f.appendChild(stateInput);
   if(bookingNonce){{var n=document.createElement('input');n.type='hidden';n.name='booking_nonce';n.value=bookingNonce;f.appendChild(n);}}
   if(t){{var i=document.createElement('input');i.type='hidden';i.name='id_token';i.value=t;f.appendChild(i);}}
